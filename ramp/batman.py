@@ -36,7 +36,7 @@ class Batman:
         burnup_model - A strategy that gets the state and returns a decay model and a
                     reaction model for each component in the state's core.
         partition_func - function used to determine the number of burnup cells
-                    each worker has to XXXX with, it gets the number of
+                    each worker has to deal with, it gets the number of
                     burnup cells and returns the number of cells each worker gets
         minimal_reactivity_tolerance - minimal value for the tolerance when searching
                                        reactivity value, default is 0.

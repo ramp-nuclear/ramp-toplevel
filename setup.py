@@ -13,7 +13,6 @@ if __name__ == '__main__':
           description="Reactors Analysis Managment Program",
           long_description=long_description,
           long_description_content_type="text/markdown",
-          package_data={'': ['ramp.XXXX']},
           packages=find_packages(),
           scripts=[],
           entry_points={},

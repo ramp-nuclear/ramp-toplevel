@@ -8,11 +8,11 @@ from pathlib import Path
 from tempfile import mkdtemp
 
 import dask
-import XXXX
+import yaml
 from dask_jobqueue import SLURMCluster
 
 logger = logging.getLogger(__name__)
-CONFIG_PATH = Path(__file__).parent / "ramp.XXXX"
+CONFIG_PATH = Path(__file__).parent / "ramp.yaml"
 dask.config.ensure_file(source=str(CONFIG_PATH))
 
 
@@ -32,7 +32,7 @@ def make_logging_directory(path) -> str:
 LOG_DIRECTORY = make_logging_directory(f'~/.ramp/{date.today()}')
 
 with CONFIG_PATH.open() as f:
-    defaults = XXXX.load(f, Loader=XXXX.Loader)
+    defaults = yaml.load(f, Loader=yaml.Loader)
     mc = defaults['jobqueue']['mc']
     burnup = defaults['jobqueue']['burnup']
     mc['log-directory'] = burnup['log-directory'] = LOG_DIRECTORY

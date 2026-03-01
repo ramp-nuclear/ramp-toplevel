@@ -23,7 +23,7 @@ class FakeState:
         self.drhodt = -100. / day
         self.rho_0_in = -3000.
         self.out_h = 64.
-        self.history = History({'power': XX.})
+        self.history = History({'power': 25.})
 
     @property
     def controls(self) -> Iterable[Tuple[float, float]]:
