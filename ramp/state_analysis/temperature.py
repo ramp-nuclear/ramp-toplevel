@@ -9,7 +9,7 @@ from coremaker.tree import Node
 from coreoperator import OperationalState
 from dask import delayed as impure_delayed
 from isotopes import U235
-from ramp.transport.query import KQuery
+from corecompute.query import KQuery
 
 from .util import PCMAndError, diff, DelayedOracleFunc
 

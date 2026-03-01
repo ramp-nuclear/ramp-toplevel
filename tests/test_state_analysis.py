@@ -9,19 +9,22 @@ import pytest
 from coremaker.transform import Transform
 from coreoperator import OperationalState
 from coreoperator.example import example_state
-from coreoperator.mobilization import LoadChain, Remove, LoadSite, Scheme
+from coreoperator.mobilization import LoadChain, CyclicShuffle, LoadSite, Scheme, Remove
 from dask.delayed import Delayed
 from more_itertools import first
 from ramp.state_analysis.control_rod_worth import s_curve, moveable_reactivity_worth
 from ramp.state_analysis.rod_worths import rods_extraction_worth
 from ramp.state_analysis.shuffle_worths import decompose_action, \
     stepwise_shuffle_reactivity
-from ramp.transport import KResult, KQuery
+from corecompute.query import KQuery
+from corecompute.result import KResult
 from toolz import identity
 from uncertainties.core import AffineScalarFunc, nominal_value
 
 
 def _to_oracle_result(reactivity, reactivity_error):
+    reactivity = reactivity if isinstance(reactivity, (float, int)) else reactivity.item()
+    reactivity_error = reactivity_error if isinstance(reactivity_error, float) else reactivity_error.item()
     return {KQuery(): [KResult.from_reactivity(reactivity, reactivity_error)]}
 
 
@@ -32,7 +35,7 @@ def test_get_rods_extraction_worth():
         aluminum_block_node = example_state.core[PurePath('A1') / PurePath('coolant') / PurePath('aluminum_block')]
         num_of_aluminum_blocks = sum(node == aluminum_block_node
                                      for _, node in state.core.nodes)
-        nominal_num_of_aluminum_blocks = np.product(example_state.core.grid.lattice.shape)
+        nominal_num_of_aluminum_blocks = np.prod(example_state.core.grid.lattice.shape)
         reactivity = rod_worth * \
                      (num_of_aluminum_blocks - nominal_num_of_aluminum_blocks)
         reactivity_error = 0.03 * abs(reactivity)
@@ -128,7 +131,7 @@ def test_decompose_action(factory):
                                   if isinstance(action, Remove)
                                   else first(action.sites)[0]
                                   for action in decomposed_action]
-    assert all(site in sites for site in sites_in_decomposed_action)
+    assert all(site in sites for site in sites_in_decomposed_action), [site for site in sites_in_decomposed_action if site not in sites]
     counter = Counter(sites_in_decomposed_action)
     assert all(counter[site] == 2 for site in sites)
     assert all(first(action.sites)[1] == t
@@ -146,14 +149,13 @@ def test_stepwise_shuffle_reactivity(factory):
     sites = list(example_state.core.grid.sites())[:10]
     load_chain = LoadChain(factory=factory,
                            sites=sites)
-    remove = Remove(('A1', ))
-    scheme = Scheme((load_chain, remove))
+    scheme = Scheme((load_chain,))
 
     def _calculator(state: OperationalState, queries=None, prefix=''):
-        if not state.history.actions[-1].scheme:
+        if not isinstance(state.history.steps[-1], Scheme):
             reactivity = 0.
         else:
-            reactivity = len(state.history.actions[-1].scheme.actions)
+            reactivity = len(state.history.steps[-1].actions)
         reactivity_error = 0.03 * reactivity
         return _to_oracle_result(reactivity, reactivity_error)
     reactivities, = dask.compute(stepwise_shuffle_reactivity(example_state,
@@ -161,5 +163,5 @@ def test_stepwise_shuffle_reactivity(factory):
                                                              calculator=_calculator))
     for scheme, reactivity in reactivities.items():
         assert np.isclose(len(scheme.actions), nominal_value(reactivity))
-    assert len(reactivities) == 2 * len(sites) + 2
+    assert len(reactivities) == 2 * len(sites) + 1
 

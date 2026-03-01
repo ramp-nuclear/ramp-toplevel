@@ -8,7 +8,7 @@ from functools import partial
 from coreoperator import OperationalState
 from dask import delayed as impure_delayed
 from ramp.state_analysis.util import PCMAndError, diff, DelayedOracleFunc
-from ramp.transport.query import KQuery
+from corecompute.query import KQuery
 
 delayed = partial(impure_delayed, pure=True)
 kquery = KQuery()

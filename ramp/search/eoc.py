@@ -14,7 +14,7 @@ from scipy.constants import day
 from coreoperator.operational_state import OperationalState
 from batman import BurnResult
 from ramp.regime import Regime
-from ramp.transport.result.kresult import PCM, KResult
+from corecompute.result import PCM, KResult
 from ramp.utils import PCMPerSecond
 
 logger = logging.getLogger(__name__)
@@ -84,11 +84,11 @@ def _next_state(state: OperationalState, *,
         Tuple[OperationalState, OperationalState, PCMPerSecond]:
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
-    if safe_reactivity and state.history.time_since_scheme.total_seconds() != safe.history.time_since_scheme.total_seconds():
+    if safe_reactivity and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds():
         drhodt = (kwild.reactivity - safe_reactivity) / (
-                state.history.time_since_scheme.total_seconds() - safe.history.time_since_scheme.total_seconds())
+                state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds())
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
-    logger.info(f'Stepping from {state.history.time_since_scheme} '
+    logger.info(f'Stepping from {state.history.cycle_time} '
                 f'with a guess of {guess} '
                 f'reactivity is {kwild.reactivity} ')
     if forward:
@@ -106,12 +106,12 @@ def _next_state(state: OperationalState, *,
                     f'{info.rho:.0f} PCM\n'
                     f'Estimated drho/dt={info.drhodt * day:.0f} PCM/DAY')
     else:
-        step = state.history.timedelta + guess - safe.history.timedelta
+        step = state.history.cycle_time + guess - safe.history.cycle_time
         if step > regime.maximal_timestep:
             step = step / 2
         logger.info("Doing a step from the safe time "
-                    f"{safe.history.time_since_scheme} to "
-                    f"{safe.history.time_since_scheme + step}")
+                    f"{safe.history.cycle_time} to "
+                    f"{safe.history.cycle_time + step}")
         state, info = regime.burnstep(safe, step)
     return state, safe, info.drhodt, safe_reactivity
 

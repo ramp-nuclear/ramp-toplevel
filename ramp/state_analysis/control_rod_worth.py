@@ -8,7 +8,7 @@ from typing import Tuple, Iterable, Dict, Container, Optional, Sequence
 from coreoperator.operational_state import OperationalState
 from dask.delayed import Delayed, delayed
 from ramp.regime.controlled_regime import heightwise_characteristic
-from ramp.transport.query import KQuery
+from corecompute.query import KQuery
 
 from .common_states import cold_unpoisoned
 from .util import PCMAndError, pcm_err, diff, OracleFuncFull, OracleFunc, \

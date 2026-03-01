@@ -9,7 +9,7 @@ from dask import delayed as unpure_delayed
 from scipy.constants import day
 
 from ramp.state_analysis.util import OracleFunc, OracleFuncFull, diff
-from ramp.transport import KQuery
+from corecompute.query import KQuery
 
 MWday = float
 delayed = partial(unpure_delayed, pure=True)
@@ -17,12 +17,10 @@ PCM = float
 PCM_MWday = float
 
 
-def cycle_time_length(boc: OperationalState,
-                      eoc: OperationalState) -> timedelta:
-    return eoc.history.timedelta - boc.history.timedelta
+def cycle_time_length(eoc: OperationalState) -> timedelta:
+    return eoc.history.cycle_time
 
 
-def cycle_length(boc: OperationalState, eoc: OperationalState) -> MWday:
-    dt = cycle_time_length(boc, eoc).total_seconds() / day
-    return dt * boc.power_nuc
+def cycle_length(eoc: OperationalState) -> MWday:
+    return eoc.history.cycle_burnup
 

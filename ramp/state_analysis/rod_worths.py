@@ -6,10 +6,10 @@ from coreoperator import OperationalState
 from coreoperator.mobilization import Scheme, Remove
 from dask import delayed
 from dask.delayed import Delayed
-from ramp.oracle import OracleResult
+from corecompute.oracle import OracleResult
 from ramp.state_analysis.util import PCMAndError, diff, OracleFuncFull, \
     OracleFunc
-from ramp.transport import KQuery
+from corecompute.query import KQuery
 
 
 def rods_extraction_worth(state: OperationalState | Delayed,

@@ -7,7 +7,7 @@ from hypothesis import given, settings
 import hypothesis.strategies as st
 
 from ramp.search.eoc import max_safe_step_at_risk as max_safe
-from ramp.transport.result import KResult
+from corecompute.result import KResult
 
 
 operational_maximums = st.timedeltas(min_value=timedelta(days=20.),

@@ -10,9 +10,8 @@ from batman.solver import InputData, DistEasyData, timestep_constant_power, \
 from batman.units import Second
 from coremaker.protocols.mixture import Mixture
 from coreoperator.operational_state import OperationalState
-from reactions import Reaction
+from reactions import Reaction, ReactionRate
 
-from ramp.transport import ReactionRate
 
 BurnupModel = Dict[str, Tuple[DecayGraph, Sequence[Reaction]]]
 ReactionModel = Dict[str, Dict[Reaction, ReactionRate]]

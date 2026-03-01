@@ -12,17 +12,15 @@ from pathlib import PurePath
 from typing import Sequence, Tuple, Optional, Callable, ContextManager
 
 from batman import BurnResult
-from coreoperator.history.action import get_param
 from coreoperator.operational_state import OperationalState
 from dask import compute, delayed
 from more_itertools import difference
 from ramp.backends.burnup import ReactionModel
 from ramp.batman import Batman
-from ramp.oracle import Oracle
-from ramp.transport import KResult, ReactionRate, VolumeQuery, ReactionScore
-from ramp.transport.query import KQuery
-from ramp.transport.result.kresult import PCM
-from reactions import Reaction
+from corecompute.oracle import Oracle
+from corecompute.query import VolumeQuery, ReactionScore, KQuery
+from corecompute.result import PCM, KResult
+from reactions import Reaction, ReactionRate
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +64,7 @@ class Regime:
 
     @staticmethod
     def _time_since_boc(state: OperationalState):
-        return sum((action for action in
-                    it.takewhile(lambda x: not get_param(x, 'power'),
-                                 reversed(state.history.actions)) if
-                    isinstance(action, timedelta)), start=timedelta(0))
+        return state.history.cycle_time
 
     def burnup(self, state: OperationalState,
                time: timedelta, **oracle_kwargs) -> Tuple[

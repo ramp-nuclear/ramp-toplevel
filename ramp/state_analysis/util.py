@@ -12,9 +12,9 @@ from coreoperator import OperationalState
 from cytoolz import compose, juxt
 from dask import delayed as unpure_delayed
 from numpy import floor, log10, negative, interp
-from ramp.oracle import OracleResult
-from ramp.transport import KResult, Query
-from ramp.transport.query import KQuery
+from corecompute.oracle import OracleResult
+from corecompute.result import KResult
+from corecompute.query import KQuery, Query
 from uncertainties import ufloat, std_dev, nominal_value
 
 __all__ = ['PCMAndError', 'pcm_err', 'diff', 'split_name', 'invert', 'sround', 'decompose_ufloats',
@@ -135,7 +135,7 @@ def invert(y_target: float, x: Sequence[float], y: Sequence[float]) -> float:
         raise ValueError(f'The input x and y sequences are not of the same '
                          f'length, and thus do not represent a '
                          f'function\'s graph.')
-    return interp(y_target, xp=y, fp=x)
+    return interp(y_target, xp=y, fp=x).item()
 
 
 significant_digit: Callable[[float], int] \

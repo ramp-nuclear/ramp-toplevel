@@ -10,7 +10,7 @@ from dask.delayed import Delayed
 from more_itertools import last
 from multipledispatch import dispatch
 from ramp.state_analysis.util import PCMAndError, OracleFuncFull, OracleFunc, pcm_err
-from ramp.transport import KQuery
+from corecompute.query import KQuery
 from toolz import identity
 
 BasicAction = Remove | LoadSite

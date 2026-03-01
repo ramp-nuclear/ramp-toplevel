@@ -11,8 +11,8 @@ from dask import delayed as unpure_delayed
 from isotopes import U235
 from ramp.state_analysis.control_rod_worth import DelayedOracleFunc
 from ramp.state_analysis.util import split_name
-from ramp.transport import EnergyMap, Score, KResult, KQuery
-from ramp.transport.query import VolumeQuery
+from corecompute.query import Score, KQuery, VolumeQuery
+from corecompute.result import EnergyMap, KResult 
 
 delayed = partial(unpure_delayed, pure=True)
 __all__ = ['ppf', "ppf_and_k", "power_map"]

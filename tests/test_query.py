@@ -3,7 +3,7 @@ from hypothesis import given, settings
 from isotopes import U235, Pu239, Al27, H1, He4, B10, Xe135m
 from reactions import ProtoReaction, Typus
 
-from ramp.transport import KQuery, VolumeQuery, Score, ReactionScore
+from corecompute.query import KQuery, VolumeQuery, Score, ReactionScore
 
 kqueries = st.just(KQuery())
 fluxscore = st.just((Score('flux', volume_specific=True),))

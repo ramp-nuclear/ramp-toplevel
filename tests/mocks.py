@@ -2,20 +2,21 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import timedelta
 from random import Random
-from typing import Dict, Sequence, Iterable, Tuple, Optional
+from typing import Sequence, Iterable, Optional
 
 from batman import BurnResult
 from batman.units import PCM
-from coreoperator.history.history import History
+from coreoperator.history import History, OperationalPeriod, StateParams
 from scipy.constants import day
 
-from ramp.oracle import OracleResult
-from ramp.transport import KResult, KQuery
+from corecompute.oracle import OracleResult
+from corecompute.query import KQuery
+from corecompute.result import KResult
 
 
 class FakeState:
-    def __init__(self, control_worths: Dict[str, float],
-                 aliases: Dict[str, Sequence[str]]):
+    def __init__(self, control_worths: dict[str, float],
+                 aliases: dict[str, Sequence[str]]):
         self.control_worths = control_worths
         self.aliases = aliases
         self.heights = {alias: 0. for alias in control_worths.keys()}
@@ -23,10 +24,10 @@ class FakeState:
         self.drhodt = -100. / day
         self.rho_0_in = -3000.
         self.out_h = 64.
-        self.history = History({'power': 25.})
+        self.history = History([OperationalPeriod(StateParams(power=25., **aliases), time=timedelta(1e-3))])
 
     @property
-    def controls(self) -> Iterable[Tuple[float, float]]:
+    def controls(self) -> Iterable[tuple[float, float]]:
         for alias, height in self.heights.items():
             yield height, self.control_worths[alias]
 
@@ -34,7 +35,6 @@ class FakeState:
     def new_control_height(cls, state: "FakeState",
                            alias: str, height: float) -> "FakeState":
         new_state = deepcopy(state)
-        new_state.history.append({alias: height})
         for key in new_state.aliases[alias]:
             new_state.heights[key] = height
         return new_state
@@ -43,7 +43,8 @@ class FakeState:
     def new_time(cls, state: "FakeState", timestep: timedelta):
         new_state = deepcopy(state)
         new_state.time += timestep
-        new_state.history.append(timestep)
+        pars = state.history.current_params.copy()
+        new_state.history.timestep(time=timestep, params=pars)
         return new_state
 
 
@@ -102,7 +103,7 @@ class FakeOracleNoisy(FakeOracle):
     __call__ = direct
 
 
-def _new_k(k0: float, drhodt: float, time: float) -> Tuple[float, float]:
+def _new_k(k0: float, drhodt: float, time: float) -> tuple[float, float]:
     kres = KResult(k0, 0.)
     rho_new = kres.reactivity + drhodt * time
     knew = KResult.from_reactivity(rho_new, 0.).k

@@ -19,13 +19,13 @@ from dask.delayed import Delayed
 from isotopes import Xe135, ZAID
 from scipy.constants import day
 
-from ramp.oracle import Oracle
+from corecompute.oracle import Oracle
 from ramp.regime import Regime
 from ramp.regime.controlled_regime import heightwise_characteristic
 from ramp.search.eoc import at_eoc_one_sigma, risk_over, max_safe_step_at_risk, \
     find_eoc_from_boc
 from ramp.state_analysis.util import invert, pcm_err
-from ramp.transport import KQuery
+from corecompute.query import KQuery
 
 degC = float
 ND = float

@@ -5,10 +5,10 @@ from functools import partial
 from typing import Tuple, Callable
 
 from coreoperator.operational_state import OperationalState
-from ramp.transport.query import KQuery
-from ramp.oracle import Oracle
+from corecompute.query import KQuery
+from corecompute.oracle import Oracle
 from ramp.search.choice import best_choice
-from ramp.transport.result.kresult import KResult, PCM
+from corecompute.result import KResult, PCM
 
 
 def find_height_at_given_reactivity(oracle: Oracle, state: OperationalState,

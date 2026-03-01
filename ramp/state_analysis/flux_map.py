@@ -17,8 +17,8 @@ from coremaker.tree import Tree
 from coreoperator import OperationalState
 from cytoolz import valmap, compose
 from ramp.state_analysis.util import OracleFuncFull
-from ramp.transport import Score, VolumeQuery
-from ramp.transport.query.meshquery import MeshQuery, eV
+from corecompute.query import Score, VolumeQuery
+from corecompute.query.meshquery import MeshQuery, eV
 
 cm = float
 

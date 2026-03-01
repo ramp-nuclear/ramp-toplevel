@@ -7,12 +7,11 @@ from typing import Tuple, Optional, Callable, Sequence
 from batman import BurnResult, Configuration
 from coreoperator.operational_state import OperationalState
 
-from ramp.transport import ReactionScore
-from ramp.transport.query import VolumeQuery
+from corecompute.query import VolumeQuery, ReactionScore
 from ramp.backends.burnup import BurnupModel, ReactionModel, \
     _partitions_heuristics
 from ramp.runners.burnup_runner import run_burnup, run_burnup_to_k
-from ramp.transport.result.kresult import PCM
+from corecompute.result import PCM
 from toolz import groupby
 
 ModelFunc = Callable[[OperationalState], BurnupModel]

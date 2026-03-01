@@ -15,9 +15,9 @@ from dask import delayed, compute
 from dask.delayed import Delayed
 from ramp.backends.burnup import ReactionModel
 from ramp.batman import Batman
-from ramp.oracle import Oracle
+from corecompute.oracle import Oracle
 from ramp.regime.regime import Regime, reaction_rates_calculator
-from ramp.transport.result.kresult import KResult, PCM
+from corecompute.result import KResult, PCM
 from ramp.utils.docs import append_doc_of
 from reactions import Reaction, ReactionRate
 from toolz import curry
