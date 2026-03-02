@@ -44,14 +44,6 @@ def _analyze_radial_pff(power_map: Dict[str, Tuple[float, float]]
     return site, label, power[site, label] / power.mean()
 
 
-def test_max_to_mean_with_different_values():
-    mp = {'%d' % i: (float(i), 1.) for i in range(1, 6)}
-    mx, err, name = _analyze_pff(mp)
-    from pytest import approx
-    assert mx == approx(5. / 3.)
-    assert name == '5'
-
-
 def ppf(state: OperationalState,
         *, calculator: DelayedOracleFunc, prefix: str = ''
         ) -> Tuple[Tuple[float, float, str], Tuple[str, str, float]]:

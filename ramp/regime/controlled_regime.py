@@ -10,7 +10,7 @@ from typing import Sequence, Tuple, ContextManager, Any, Iterable, Callable
 
 from batman import BurnResult
 from coreoperator.operational_state import OperationalState
-from cytoolz import compose
+from toolz import compose, curry
 from dask import delayed, compute
 from dask.delayed import Delayed
 from ramp.backends.burnup import ReactionModel
@@ -20,7 +20,6 @@ from ramp.regime.regime import Regime, reaction_rates_calculator
 from corecompute.result import KResult, PCM
 from ramp.utils.docs import append_doc_of
 from reactions import Reaction, ReactionRate
-from toolz import curry
 
 logger = logging.getLogger(__name__)
 DEFAULT_TOLERANCE = 3e3

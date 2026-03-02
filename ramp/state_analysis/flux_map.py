@@ -15,7 +15,7 @@ from coremaker.mesh import CartesianMesh
 from coremaker.protocols.geometry import Geometry, UnionGeometry
 from coremaker.tree import Tree
 from coreoperator import OperationalState
-from cytoolz import valmap, compose
+from toolz import valmap, compose
 from ramp.state_analysis.util import OracleFuncFull
 from corecompute.query import Score, VolumeQuery
 from corecompute.query.meshquery import MeshQuery, eV

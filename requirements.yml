@@ -1,18 +1,11 @@
 dependencies:
+  - toolz
   - dask
   - scipy
   - numpy
-  - toolz
   - more-itertools
   - dask-jobqueue
   - distributed
-  - packaging
   - uncertainties
-  - pytest
   - pandas
-  - partd
-  - objgraph
-  - decorator
   - pyyaml
-  - pip
-  - pyzmq

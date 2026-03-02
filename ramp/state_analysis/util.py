@@ -9,7 +9,7 @@ from typing import Protocol, Union, Tuple, Optional, Callable, Sequence
 
 import uncertainties
 from coreoperator import OperationalState
-from cytoolz import compose, juxt
+from toolz import compose, juxt
 from dask import delayed as unpure_delayed
 from numpy import floor, log10, negative, interp
 from corecompute.oracle import OracleResult

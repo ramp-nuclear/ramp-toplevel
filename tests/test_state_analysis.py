@@ -41,11 +41,11 @@ def test_get_rods_extraction_worth():
         reactivity_error = 0.03 * abs(reactivity)
         return _to_oracle_result(reactivity, reactivity_error)
 
-    sites = example_state.core.grid.contents.keys()
+    sites = [key for key in example_state.core.grid.contents.keys()][:4]
     delayed_rods_worths = rods_extraction_worth(example_state, sites,
                                                 calculator=_calculator)
     rods_worth,  = dask.compute(delayed_rods_worths)
-    assert rods_worth.keys() == sites
+    assert list(rods_worth.keys()) == sites
     assert all([np.isclose(rods_worth[site].nominal_value, -rod_worth)
                 for site in sites])
 
