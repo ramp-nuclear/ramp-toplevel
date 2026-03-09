@@ -1,15 +1,11 @@
-"""Operational related quantities.
+"""Operational related quantities."""
 
-"""
 from datetime import timedelta
 from functools import partial
 
 from coreoperator import OperationalState
 from dask import delayed as unpure_delayed
-from scipy.constants import day
 
-from ramp.state_analysis.util import OracleFunc, OracleFuncFull, diff
-from corecompute.query import KQuery
 
 MWday = float
 delayed = partial(unpure_delayed, pure=True)
@@ -23,4 +19,3 @@ def cycle_time_length(eoc: OperationalState) -> timedelta:
 
 def cycle_length(eoc: OperationalState) -> MWday:
     return eoc.history.cycle_burnup
-

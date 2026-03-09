@@ -1,10 +1,10 @@
-"""Temperature dependence analysis.
+"""Temperature dependence analysis."""
 
-"""
 from functools import partial
 from pathlib import PurePath
-from typing import Tuple, Callable
+from typing import Callable
 
+from coremaker.materials.water import _H2O
 from coremaker.tree import Node
 from coreoperator import OperationalState
 from dask import delayed as impure_delayed
@@ -13,7 +13,7 @@ from corecompute.query import KQuery
 
 from .util import PCMAndError, diff, DelayedOracleFunc
 
-ValueAndError = Tuple[float, float]
+ValueAndError = tuple[float, float]
 delayed = partial(impure_delayed, pure=True)
 
 kquery = KQuery()
@@ -21,26 +21,33 @@ kquery = KQuery()
 StateChange = Callable[[float], OperationalState]
 
 
-def _temperature_coefficient(state_factory: StateChange,
-                             *, calculator: DelayedOracleFunc, prefix: str = '',
-                             hot_temp: float,
-                             cold_temp: float,
-                             ) -> PCMAndError:
-    states = [delayed(state_factory)(temp)
-              for temp in (hot_temp, cold_temp)]
-    prefixes = (prefix + f'_{name}' for name in ('hot', 'cold'))
-    hotres, coldres = [calculator(_state, kquery, prefix=_prefix)
-                       for _state, _prefix in zip(states, prefixes)]
+def _temperature_coefficient(
+    state_factory: StateChange,
+    *,
+    calculator: DelayedOracleFunc,
+    prefix: str = "",
+    hot_temp: float,
+    cold_temp: float,
+) -> PCMAndError:
+    states = [delayed(state_factory)(temp) for temp in (hot_temp, cold_temp)]
+    prefixes = (prefix + f"_{name}" for name in ("hot", "cold"))
+    hotres, coldres = [
+        calculator(_state, kquery, prefix=_prefix)
+        for _state, _prefix in zip(states, prefixes)
+    ]
     worth = delayed(diff)(hotres, coldres)
     return worth / (hot_temp - cold_temp)
 
 
-def temperature_coefficient(state: OperationalState, *,
-                            calculator: DelayedOracleFunc,
-                            prefix: str = '',
-                            hot_temperature: float = 40.,
-                            cold_temperature: float = 20.
-                            ) -> PCMAndError:
+def temperature_coefficient(
+    state: OperationalState,
+    *,
+    calculator: DelayedOracleFunc,
+    prefix: str = "",
+    hot_temperature: float = 40.0,
+    cold_temperature: float = 20.0,
+    water_density_strategy: Callable[[float], float] = _H2O,
+) -> PCMAndError:
     """The temperature coefficient of this core, i.e. what the reactivity change
     is if the core uniformly heats up by 1 degC.
 
@@ -53,6 +60,7 @@ def temperature_coefficient(state: OperationalState, *,
     prefix - String used in the beginning of the workspace directory name.
     hot_temperature - Water temperature in the hot state.
     cold_temperature - Water temperature in the cold state.
+    water_density_strategy - Function to compute the water density given temperature.
 
     Returns
     -------
@@ -60,17 +68,24 @@ def temperature_coefficient(state: OperationalState, *,
     including the effects of coolant density change. In PCM/degC.
 
     """
-    return _temperature_coefficient(state.new_temperature,
-                                    calculator=calculator, prefix=prefix,
-                                    hot_temp=hot_temperature, cold_temp=cold_temperature)
+    return _temperature_coefficient(
+        partial(state.new_temperature, water_density_strategy=water_density_strategy),
+        calculator=calculator,
+        prefix=prefix,
+        hot_temp=hot_temperature,
+        cold_temp=cold_temperature,
+    )
 
 
-def water_temperature_coefficient(state: OperationalState, *,
-                                  calculator: DelayedOracleFunc,
-                                  prefix: str = '',
-                                  hot_temperature: float = 40.,
-                                  cold_temperature: float = 20.
-                                  ) -> PCMAndError:
+def water_temperature_coefficient(
+    state: OperationalState,
+    *,
+    calculator: DelayedOracleFunc,
+    prefix: str = "",
+    hot_temperature: float = 40.0,
+    cold_temperature: float = 20.0,
+    water_density_strategy: Callable[[float], float] = _H2O,
+) -> PCMAndError:
     """The temperature coefficient of water in the core, i.e., what the
     reactivity change is if the water in the core uniformly heats up by 1 degC.
 
@@ -84,23 +99,32 @@ def water_temperature_coefficient(state: OperationalState, *,
     prefix - String used in the beginning of the workspace directory name.
     hot_temperature - Water temperature in the hot state.
     cold_temperature - Water temperature in the cold state.
+    water_density_strategy - Function to compute the water density given temperature.
 
     Returns
     -------
     Water temperature coefficient for the core, in PCM/degC.
 
     """
-    return _temperature_coefficient(state.new_water_temperature,
-                                    calculator=calculator, prefix=prefix,
-                                    hot_temp=hot_temperature, cold_temp=cold_temperature)
+    return _temperature_coefficient(
+        partial(
+            state.new_water_temperature, water_density_strategy=water_density_strategy
+        ),
+        calculator=calculator,
+        prefix=prefix,
+        hot_temp=hot_temperature,
+        cold_temp=cold_temperature,
+    )
 
 
-def fuel_temperature_coefficient(state: OperationalState, *,
-                                 calculator: DelayedOracleFunc,
-                                 prefix: str = '',
-                                 hot_temperature: float = 120.,
-                                 cold_temperature: float = 20.
-                                 ) -> PCMAndError:
+def fuel_temperature_coefficient(
+    state: OperationalState,
+    *,
+    calculator: DelayedOracleFunc,
+    prefix: str = "",
+    hot_temperature: float = 120.0,
+    cold_temperature: float = 20.0,
+) -> PCMAndError:
     """The temperature coefficient of fuel in the core, i.e., what the
     reactivity change is if the fuel in the core uniformly heats up by 1 degC.
 
@@ -123,6 +147,10 @@ def fuel_temperature_coefficient(state: OperationalState, *,
     def isfuel(path: PurePath, node: Node):
         return node.mixture and U235 in node.mixture
 
-    return _temperature_coefficient(partial(state.new_temperature, to_change=isfuel),
-                                    calculator=calculator, prefix=prefix,
-                                    hot_temp=hot_temperature, cold_temp=cold_temperature)
+    return _temperature_coefficient(
+        partial(state.new_temperature, to_change=isfuel),
+        calculator=calculator,
+        prefix=prefix,
+        hot_temp=hot_temperature,
+        cold_temp=cold_temperature,
+    )

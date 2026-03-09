@@ -4,7 +4,14 @@ from operator import itemgetter, matmul
 from typing import Sequence, Optional, Any, Callable
 
 from coreoperator import OperationalState
-from coreoperator.mobilization import Scheme, GridAction, Remove, LoadChain, LoadSite, CyclicShuffle
+from coreoperator.mobilization import (
+    Scheme,
+    GridAction,
+    Remove,
+    LoadChain,
+    LoadSite,
+    CyclicShuffle,
+)
 from dask import delayed
 from dask.delayed import Delayed
 from more_itertools import last
@@ -22,7 +29,9 @@ def decompose_action(action: Remove, state: OperationalState) -> Sequence[BasicA
 
 
 @dispatch(LoadChain, OperationalState)
-def decompose_action(action: LoadChain, state: OperationalState) -> Sequence[BasicAction]:
+def decompose_action(
+    action: LoadChain, state: OperationalState
+) -> Sequence[BasicAction]:
     """
     Decompose a load chain into a sequence of removals and insertions
     according to the minimalistic order of events in the application of a
@@ -32,23 +41,26 @@ def decompose_action(action: LoadChain, state: OperationalState) -> Sequence[Bas
     sites = list(map(itemgetter(0), action.sites))
     transforms = list(map(itemgetter(1), action.sites))
     grid = state.core.grid
-    steps = [Remove((last(sites), ))]
-    for (site, previous_site), transform in zip(pairwise(reversed(sites)),
-                                                reversed(transforms[1:])):
+    steps = [Remove((last(sites),))]
+    for (site, previous_site), transform in zip(
+        pairwise(reversed(sites)), reversed(transforms[1:])
+    ):
         rod = grid[previous_site]
         factory = partial(identity, rod)
-        factory.__name__ = f'rod_previously_at_{previous_site}'
-        steps.append(Remove((previous_site, )))
-        steps.append(LoadSite(factory=factory,
-                              site=(site, transform)))
-    steps.append(LoadSite(action.factory, (sites[0], transforms[0])))
+        factory.__name__ = f"rod_previously_at_{previous_site}"
+        steps.append(Remove((previous_site,)))
+        steps.append(LoadSite(factory=factory, site=site, transform=transform))
+    steps.append(LoadSite(action.factory, sites[0], transforms[0]))
     return steps
 
 
 @dispatch(CyclicShuffle, OperationalState)
-def decompose_action(action: CyclicShuffle, state: OperationalState) -> Sequence[BasicAction]:
-    raise NotImplementedError(f'decomposing an action is not implemented'
-                              f'for actions of type: {type(action)}')
+def decompose_action(
+    action: CyclicShuffle, state: OperationalState
+) -> Sequence[BasicAction]:
+    raise NotImplementedError(
+        f"decomposing an action is not implementedfor actions of type: {type(action)}"
+    )
 
 
 @dispatch(LoadChain)
@@ -61,8 +73,9 @@ def _decomposition_length(action: GridAction):
     return 1
 
 
-def intermediate_schemes(scheme: Scheme, state: OperationalState,
-                         initial: bool = True) -> list[Scheme]:
+def intermediate_schemes(
+    scheme: Scheme, state: OperationalState, initial: bool = True
+) -> list[Scheme]:
     """
     Decompose a scheme that defines some shuffling procedure to a series of
     schemes such that each decomposed scheme serves as a model to some
@@ -73,9 +86,10 @@ def intermediate_schemes(scheme: Scheme, state: OperationalState,
     the actual order of events during the shuffling procedure.
     """
     # noinspection PyTypeChecker
-    step_schemes = map(lambda x: Scheme((x, )),
-                       chain(*(decompose_action(action, state)
-                               for action in scheme.actions)))
+    step_schemes = map(
+        lambda x: Scheme((x,)),
+        chain(*(decompose_action(action, state) for action in scheme.actions)),
+    )
     initial = Scheme() if initial is True else None
     return list(accumulate(step_schemes, func=matmul, initial=initial))
 
@@ -84,10 +98,13 @@ def _intermediate_schemes_length(scheme: Scheme, initial: bool = True):
     return sum(map(_decomposition_length, scheme.actions), start=initial)
 
 
-def stepwise_shuffle_characteristic(state: OperationalState | Delayed,
-                                    scheme: Scheme, *,
-                                    characteristic: Callable[[OperationalState], Any],
-                                    initial: bool = True) -> dict[Scheme | Delayed, Any]:
+def stepwise_shuffle_characteristic(
+    state: OperationalState | Delayed,
+    scheme: Scheme,
+    *,
+    characteristic: Callable[[OperationalState], Any],
+    initial: bool = True,
+) -> dict[Scheme | Delayed, Any]:
     """
     Lazily calculate the characteristic of a state on which a shuffling scheme
     is applied at all of its intermediate stages during the shuffling procedure.
@@ -98,7 +115,7 @@ def stepwise_shuffle_characteristic(state: OperationalState | Delayed,
     (where each scheme defines a snapshot of the reactor's state during
     shuffling) and their corresponding reactivity values.
     For further explanation on the scheme's decomposition process, see
-    the documentation of :func:`.intermediate_schemes`.
+    the documentation of ramp.state_analysis.intermediate_schemes.
 
     Parameters
     ----------
@@ -115,23 +132,26 @@ def stepwise_shuffle_characteristic(state: OperationalState | Delayed,
     """
     state = state if isinstance(state, Delayed) else delayed(state)
     intermediate_schemes_num = _intermediate_schemes_length(scheme, initial=initial)
-    schemes = delayed(intermediate_schemes,
-                      nout=intermediate_schemes_num)(scheme, state, initial=initial)
+    schemes = delayed(intermediate_schemes, nout=intermediate_schemes_num)(
+        scheme, state, initial=initial
+    )
 
     @delayed
-    def _post_shuffle_characteristic(_state: OperationalState,
-                                     _scheme: Scheme) -> Any:
+    def _post_shuffle_characteristic(_state: OperationalState, _scheme: Scheme) -> Any:
         _state = _state.new_after_scheme(_scheme)
         return characteristic(_state)
-    return {scheme: _post_shuffle_characteristic(state, scheme)
-            for scheme in schemes}
+
+    return {scheme: _post_shuffle_characteristic(state, scheme) for scheme in schemes}
 
 
-def stepwise_shuffle_reactivity(state: OperationalState | Delayed,
-                                scheme: Scheme, *,
-                                calculator: OracleFuncFull | OracleFunc,
-                                initial: bool = True,
-                                prefix: Optional[str] = None) -> dict[Scheme, PCMAndError]:
+def stepwise_shuffle_reactivity(
+    state: OperationalState | Delayed,
+    scheme: Scheme,
+    *,
+    calculator: OracleFuncFull | OracleFunc,
+    initial: bool = True,
+    prefix: Optional[str] = None,
+) -> dict[Scheme, PCMAndError]:
     """
     Lazily calculate the reactivity of a state on which a shuffling scheme is
     applied at all of its intermediate stages during the shuffling procedure.
@@ -159,6 +179,7 @@ def stepwise_shuffle_reactivity(state: OperationalState | Delayed,
 
     def _reactivity(_state: OperationalState) -> PCMAndError:
         return pcm_err(calculator(_state, KQuery(), prefix=prefix))
-    return stepwise_shuffle_characteristic(state, scheme,
-                                           characteristic=_reactivity,
-                                           initial=initial)
+
+    return stepwise_shuffle_characteristic(
+        state, scheme, characteristic=_reactivity, initial=initial
+    )

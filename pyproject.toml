@@ -26,16 +26,22 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "toolz",
     "dask",
-    "scipy",
-    "numpy",
-    "more-itertools",
     "dask-jobqueue",
     "distributed",
-    "uncertainties",
+    "more-itertools",
+    "numpy",
     "pandas",
     "pyyaml",
+    "ramp-batman",
+    "ramp-corecompute",
+    "ramp-coremaker",
+    "ramp-coreoperator",
+    "ramp-isotopes",
+    "ramp-reactions",
+    "toolz",
+    "scipy",
+    "uncertainties",
 ]
 
 [project.optional-dependencies]

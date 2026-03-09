@@ -99,7 +99,7 @@ def thin(x, y, tolerance=0.001):
         for i in range(i_left + 1, i_right):
             # Determine error in interpolated point
             y_interp = y[i_left] + m * (x[i] - x[i_left])
-            if abs(y[i]) > 0.:
+            if abs(y[i]) > 0.0:
                 error = abs((y_interp - y[i]) / y[i])
             else:
                 error = 2 * tolerance

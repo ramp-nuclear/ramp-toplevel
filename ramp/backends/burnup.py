@@ -1,61 +1,71 @@
-"""Tools for running the burnup code.
+"""Tools for running the burnup code."""
 
-"""
 from datetime import timedelta
-from typing import Sequence, Tuple, Dict, Optional, Callable
+from typing import Sequence, Optional, Callable, Iterable
+from pathlib import PurePath
 
 from batman.graphs import DecayGraph, GraphFilter
-from batman.solver import InputData, DistEasyData, timestep_constant_power, \
-    step_desired_k_at_power, Configuration, BurnResult
+from batman.solver import (
+    InputData,
+    DistEasyData,
+    timestep_constant_power,
+    step_desired_k_at_power,
+    Configuration,
+    BurnResult,
+)
 from batman.units import Second
-from coremaker.protocols.mixture import Mixture
 from coreoperator.operational_state import OperationalState
 from reactions import Reaction, ReactionRate
 
 
-BurnupModel = Dict[str, Tuple[DecayGraph, Sequence[Reaction]]]
-ReactionModel = Dict[str, Dict[Reaction, ReactionRate]]
+BurnupModel = dict[str, tuple[DecayGraph, Sequence[Reaction]]]
+ReactionModel = dict[str, dict[Reaction, ReactionRate]]
 
 NULLFILTER = GraphFilter()
 
 
-def _partitions_heuristics(n: int):
+def batman_partitions_heuristics(n: int):
     """
     A heuristic for the number of partitions in the DistEasyData's dask bag.
     """
     return max(n // 100, 1)
 
 
-def _pre_exec_burnup(state: OperationalState,
-                     burnup_model: BurnupModel,
-                     rates: ReactionModel,
-                     partition_func: Callable[[int], int]):
+def _pre_exec_burnup(
+    state: OperationalState,
+    burnup_model: BurnupModel,
+    rates: ReactionModel,
+    partition_func: Callable[[int], int],
+) -> tuple[float, Iterable[PurePath], DistEasyData]:
     power = state.power_nuc
     named_components = dict(state.core.named_components)
     components = [named_components[name] for name in burnup_model]
     decay_models = [decay_graph for decay_graph, _ in burnup_model.values()]
-    reaction_models = [[rates[name][reaction] for reaction in reactions]
-                       for name, (_, reactions) in burnup_model.items()]
+    reaction_models = [
+        [rates[name][reaction] for reaction in reactions]
+        for name, (_, reactions) in burnup_model.items()
+    ]
     volumes = [c.geometry.volume for c in components]
     assert all(vol > 0 for vol in volumes)
     mixtures = [c.mixture for c in components]
     filters = [NULLFILTER for _ in components]
-    inputdata = InputData(decay_models, reaction_models, filters, mixtures,
-                          volumes)
-    data = DistEasyData.from_input(inputdata,
-                                   partitions=partition_func(
-                                       len(burnup_model)))
+    inputdata = InputData(decay_models, reaction_models, filters, mixtures, volumes)
+    data = DistEasyData.from_input(
+        inputdata, partitions=partition_func(len(burnup_model))
+    )
     return power, burnup_model.keys(), data
 
 
-def execute_burnup(*, state: OperationalState,
-                   k0: Optional[float] = None,
-                   burnup_model: BurnupModel,
-                   rates: ReactionModel,
-                   time: timedelta,
-                   config: Configuration,
-                   partition_func: Callable[[int], int]) -> \
-        Tuple[Dict[str, Mixture], BurnResult]:
+def run_burnup(
+    *,
+    state: OperationalState,
+    k0: Optional[float] = None,
+    burnup_model: BurnupModel,
+    rates: ReactionModel,
+    time: timedelta,
+    config: Configuration,
+    partition_func: Callable[[int], int],
+) -> tuple[OperationalState, BurnResult]:
     """Run burnup on some core state given its calculated reaction rates.
 
     Parameters
@@ -69,25 +79,31 @@ def execute_burnup(*, state: OperationalState,
     partition_func - function used to determine the number of partitions
 
     """
-    power, names, data = _pre_exec_burnup(state=state,
-                                          burnup_model=burnup_model,
-                                          rates=rates,
-                                          partition_func=partition_func)
-    mixtures, exinfo = timestep_constant_power(data, power,
-                                               time.total_seconds(),
-                                               config=config,
-                                               k0=k0)
-    return dict(zip(names, mixtures)), exinfo
+    power, names, data = _pre_exec_burnup(
+        state=state,
+        burnup_model=burnup_model,
+        rates=rates,
+        partition_func=partition_func,
+    )
+    mixtures, info = timestep_constant_power(
+        data, power, time.total_seconds(), config=config, k0=k0
+    )
+    return state.burnup(mixtures=dict(zip(names, mixtures)), time=time), info
 
 
-def execute_burnup_to_k(*, state: OperationalState,
-                        burnup_model: BurnupModel,
-                        rates: ReactionModel, k0: float, k: float,
-                        k_tol: float, maxt: timedelta,
-                        guess: Optional[timedelta] = None,
-                        config: Configuration,
-                        partition_func: Callable[[int], int]) -> \
-        Tuple[Dict[str, Mixture], BurnResult]:
+def run_burnup_to_k(
+    *,
+    state: OperationalState,
+    burnup_model: BurnupModel,
+    rates: ReactionModel,
+    k0: float,
+    k: float,
+    k_tol: float,
+    maxt: timedelta,
+    guess: Optional[timedelta] = None,
+    config: Configuration,
+    partition_func: Callable[[int], int],
+) -> tuple[OperationalState, BurnResult]:
     """Fire away burnup so it tries to reach some specific k-eigenvalue.
 
     Parameters
@@ -104,16 +120,21 @@ def execute_burnup_to_k(*, state: OperationalState,
     partition_func - function used to determiner the number of partitions
 
     """
-    power, names, data = _pre_exec_burnup(state=state,
-                                          burnup_model=burnup_model,
-                                          rates=rates,
-                                          partition_func=partition_func)
+    power, names, data = _pre_exec_burnup(
+        state=state,
+        burnup_model=burnup_model,
+        rates=rates,
+        partition_func=partition_func,
+    )
     guess: Optional[Second] = guess and guess.total_seconds()
     mixtures, info = step_desired_k_at_power(
-        data, p=power,
-        k0=k0, k=k,
+        data,
+        p=power,
+        k0=k0,
+        k=k,
         guess=guess,
         k_tolerance=k_tol,
         config=config,
-        maxt=maxt.total_seconds())
-    return dict(zip(names, mixtures)), info
+        maxt=maxt.total_seconds(),
+    )
+    return state.burnup(mixtures=dict(zip(names, mixtures)), time=info.time), info

@@ -1,14 +1,11 @@
-"""Configuration of this package in general.
+"""Configuration of this package in general."""
 
-"""
 import logging
 from datetime import date
 from functools import partial
 from pathlib import Path
 from tempfile import mkdtemp
 
-import dask
-import yaml
 from dask_jobqueue import SLURMCluster
 
 logger = logging.getLogger(__name__)
@@ -29,7 +26,7 @@ def make_logging_directory(path) -> str:
     return mkdtemp(dir=str(p))
 
 
-LOG_DIRECTORY = make_logging_directory(f'~/.ramp/{date.today()}')
+LOG_DIRECTORY = make_logging_directory(f"~/.ramp/{date.today()}")
 """
 with CONFIG_PATH.open() as f:
     defaults = yaml.load(f, Loader=yaml.Loader)
@@ -39,4 +36,4 @@ with CONFIG_PATH.open() as f:
 
 dask.config.update(dask.config.config, defaults, priority="new")
 """
-BurnupCluster = partial(SLURMCluster, config_name='burnup')
+BurnupCluster = partial(SLURMCluster, config_name="burnup")

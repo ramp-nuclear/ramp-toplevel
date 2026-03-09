@@ -1,10 +1,9 @@
-"""Tools for calculating the depletion information about the core state.
+"""Tools for calculating the depletion information about the core state."""
 
-"""
 from operator import itemgetter
 from pathlib import PurePath
 from string import ascii_uppercase as alphabet
-from typing import Callable, Dict, Iterable, Tuple
+from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -19,21 +18,26 @@ from scipy.constants import gram
 PerCmBarn = float
 kg = float
 
-__all__ = ['maximal_local_depletion',
-           'maximal_depletion_plate',
-           'maximal_fission_density',
-           'average_unloaded_fission_density',
-           'average_unloaded_depletion',
-           'RodFactory', 'rod_amount', 'print_depletion_map', 'depletion_map']
+__all__ = [
+    "maximal_local_depletion",
+    "maximal_depletion_element",
+    "maximal_fission_density",
+    "average_unloaded_fission_density",
+    "average_unloaded_depletion",
+    "RodFactory",
+    "rod_amount",
+    "print_depletion_map",
+    "depletion_map",
+]
 
 
 def _depletion(current: float, initial: float) -> float:
-    return 1. - (current / initial)
+    return 1.0 - (current / initial)
 
 
-def maximal_local_depletion(state: OperationalState,
-                            isfuel: Callable[[Component], bool],
-                            initial_nd: PerCmBarn) -> Tuple[PurePath, float]:
+def maximal_local_depletion(
+    state: OperationalState, isfuel: Callable[[Component], bool], initial_nd: PerCmBarn
+) -> tuple[PurePath, float]:
     """The maximal local depletion in any component in the core.
 
     Parameters
@@ -47,19 +51,25 @@ def maximal_local_depletion(state: OperationalState,
     The name of the most depleted component and its depletion.
 
     """
-    name, min_u235_nd = min(((name, comp.mixture.get(U235))
-                             for name, comp in state.core.named_components
-                             if isfuel(comp)), key=itemgetter(1))
+    name, min_u235_nd = min(
+        (
+            (name, comp.mixture.get(U235))
+            for name, comp in state.core.named_components
+            if isfuel(comp)
+        ),
+        key=itemgetter(1),
+    )
     return name, _depletion(min_u235_nd, initial_nd)
 
 
-def maximal_depletion_plate(state: OperationalState,
-                            isfuel: Callable[[Component], bool],
-                            initial_nd: PerCmBarn,
-                            split_name: Callable = split_name
-                            ) -> Tuple[str, str, float]:
-    """The maximal depletion plate in the core.
-    We assume that plate is identified by combination of (site,label)
+def maximal_depletion_element(
+    state: OperationalState,
+    isfuel: Callable[[Component], bool],
+    initial_nd: PerCmBarn,
+    split_name: Callable = split_name,
+) -> tuple[str, str, float]:
+    """The maximal depletion component in the core.
+    We assume that an element is identified by combination of (site,label)
 
     Parameters
     ----------
@@ -70,30 +80,43 @@ def maximal_depletion_plate(state: OperationalState,
 
     Returns
     -------
-    The site of the most depleted plate it's name and depletion.
-    
+    The site of the most depleted element, its name and depletion.
+
     """
     df = pd.DataFrame.from_dict(
-        {name: {'vol': comp.geometry.volume, 'nd': comp.mixture.get(U235),
-                'nd0': initial_nd,
-                **dict(zip(('site', 'label', 'x', 'y', 'z'), split_name(name)))}
-         for name, comp in state.core.named_components if isfuel(comp)},
-        orient='index')
-    grouped = df.groupby(['site', 'label']).apply(lambda x: pd.Series(
-        {'nd': np.average(x['nd'], weights=x['vol']),
-         'nd0': np.average(x['nd0'], weights=x['vol'])}))
-    dep = 1.0 - grouped['nd'] / grouped['nd0']
+        {
+            name: {
+                "vol": comp.geometry.volume,
+                "nd": comp.mixture.get(U235),
+                "nd0": initial_nd,
+                **dict(zip(("site", "label", "x", "y", "z"), split_name(name))),
+            }
+            for name, comp in state.core.named_components
+            if isfuel(comp)
+        },
+        orient="index",
+    )
+    grouped = df.groupby(["site", "label"]).apply(
+        lambda x: pd.Series(
+            {
+                "nd": np.average(x["nd"], weights=x["vol"]),
+                "nd0": np.average(x["nd0"], weights=x["vol"]),
+            }
+        )
+    )
+    dep = 1.0 - grouped["nd"] / grouped["nd0"]
     site, label = dep.idxmax()
     return site, label, dep[site, label]
 
 
-def maximal_fission_density(state: OperationalState,
-                            isfuel: Callable[[Component], bool],
-                            total_fission_zaid=ZAID(0, 188, 0),
-                            split_name: Callable = split_name
-                            ) -> Tuple[str, str, float]:
-    """The plate with the maximal fission density in the core.
-    We assume that plate is identified by combination of (site,label)
+def maximal_fission_density(
+    state: OperationalState,
+    isfuel: Callable[[Component], bool],
+    total_fission_zaid=ZAID(0, 188, 0),
+    split_name: Callable = split_name,
+) -> tuple[str, str, float]:
+    """The element with the maximal fission density in the core.
+    We assume that an element is identified by combination of (site,label)
 
     Parameters
     ----------
@@ -104,17 +127,27 @@ def maximal_fission_density(state: OperationalState,
 
     Returns
     -------
-    The site of the plate it's name and its fission density.
+    The site of the element, its name and its fission density.
 
     """
     df = pd.DataFrame.from_dict(
-        {name: {'vol': comp.geometry.volume, 'fission density': comp.mixture.get(total_fission_zaid) * 1e24,
-                **dict(zip(('site', 'label', 'x', 'y', 'z'), split_name(name)))}
-         for name, comp in state.core.named_components if isfuel(comp)},
-        orient='index')
-    grouped = df.groupby(['site', 'label']).apply(lambda x: pd.Series(
-        {'fission density': np.average(x['fission density'], weights=x['vol'])}))
-    fission_density = grouped['fission density']
+        {
+            name: {
+                "vol": comp.geometry.volume,
+                "fission density": comp.mixture.get(total_fission_zaid) * 1e24,
+                **dict(zip(("site", "label", "x", "y", "z"), split_name(name))),
+            }
+            for name, comp in state.core.named_components
+            if isfuel(comp)
+        },
+        orient="index",
+    )
+    grouped = df.groupby(["site", "label"]).apply(
+        lambda x: pd.Series(
+            {"fission density": np.average(x["fission density"], weights=x["vol"])}
+        )
+    )
+    fission_density = grouped["fission density"]
     site, label = fission_density.idxmax()
     return site, label, fission_density[site, label]
 
@@ -128,9 +161,17 @@ def rod_amount(rod: Element, isotope: Isotope) -> kg:
     isotope - Isotope to count.
 
     """
-    return sum(comp.geometry.volume * comp.mixture.get(isotope, 0.) * isotope.mass / avogadro
-               for comp in rod.components()
-               if not comp.geometry.volume is None) * gram
+    return (
+        sum(
+            comp.geometry.volume
+            * comp.mixture.get(isotope, 0.0)
+            * isotope.mass
+            / avogadro
+            for comp in rod.components()
+            if comp.geometry.volume is not None
+        )
+        * gram
+    )
 
 
 def _rod_depletion(rod: Element, fresh: Element, isotope: Isotope) -> float:
@@ -139,12 +180,10 @@ def _rod_depletion(rod: Element, fresh: Element, isotope: Isotope) -> float:
     return _depletion(amount, fresh)
 
 
-MapAid = Dict[str, Tuple[Isotope, Element]]
+MapAid = dict[str, tuple[Isotope, Element]]
 
 
-def depletion_map(state: OperationalState,
-                  freshmap: MapAid
-                  ) -> Dict[str, float]:
+def depletion_map(state: OperationalState, freshmap: MapAid) -> dict[str, float]:
     """Calculate the depletion map of a given core state.
 
     Parameters
@@ -157,12 +196,13 @@ def depletion_map(state: OperationalState,
     The depletion as a fraction in each site data is given for.
 
     """
-    return {site: float(_rod_depletion(state.core.grid[site], fresh, iso))
-            for site, (iso, fresh) in freshmap.items()}
+    return {
+        site: float(_rod_depletion(state.core.grid[site], fresh, iso))
+        for site, (iso, fresh) in freshmap.items()
+    }
 
 
-def print_depletion_map(state: OperationalState, freshmap: MapAid
-                        ) -> None:
+def print_depletion_map(state: OperationalState, freshmap: MapAid) -> None:
     """Print to screen the depletion map of a given core.
 
     Parameters
@@ -174,24 +214,28 @@ def print_depletion_map(state: OperationalState, freshmap: MapAid
     """
     depmap = depletion_map(state, freshmap)
     maxlet = max(site[0] for site in freshmap)
-    letters = alphabet[:alphabet.index(maxlet) + 1]
+    letters = alphabet[: alphabet.index(maxlet) + 1]
     rows = range(1, max(int(site[1:]) for site in freshmap) + 1)
-    pmap = [[depmap.get(f'{letter}{row}', '-') for letter in letters]
-            for row in rows]
-    print('%7s' % '' + ' '.join('%4s   ' % letter for letter in letters))
+    pmap = [[depmap.get(f"{letter}{row}", "-") for letter in letters] for row in rows]
+    print("%7s" % "" + " ".join("%4s   " % letter for letter in letters))
     for i, row in enumerate(pmap):
-        print('%4d   ' % i
-              + ' '.join(f'{dep:7.2%}' if isinstance(dep, float) else '   -   '
-                         for dep in row))
+        print(
+            "%4d   " % i
+            + " ".join(
+                f"{dep:7.2%}" if isinstance(dep, float) else "   -   " for dep in row
+            )
+        )
 
 
 RodFactory = Callable[[], Element]
 
 
-def average_unloaded_depletion(state: OperationalState,
-                               sites: Iterable[Site],
-                               isotope: Isotope,
-                               fresh_rod: RodFactory) -> float:
+def average_unloaded_depletion(
+    state: OperationalState,
+    sites: Iterable[Site],
+    isotope: Isotope,
+    fresh_rod: RodFactory,
+) -> float:
     """The average depletion of the unloaded rods.
 
     Parameters
@@ -208,9 +252,9 @@ def average_unloaded_depletion(state: OperationalState,
     return _depletion(unloaded, loaded)
 
 
-def average_unloaded_fission_density(state: OperationalState,
-                                     sites: Iterable[Site],
-                                     isotope: ZAID = ZAID(0, 188, 0)) -> float:
+def average_unloaded_fission_density(
+    state: OperationalState, sites: Iterable[Site], isotope: ZAID = ZAID(0, 188, 0)
+) -> float:
     """The average fission density of the unloaded rods.
 
     Parameters
@@ -221,7 +265,18 @@ def average_unloaded_fission_density(state: OperationalState,
 
     """
     rods = [state.core.grid[site] for site in sites]
-    return 1e24 * max(np.average([comp.mixture.get(isotope) for comp in rod.components()
-                                  if U235 in comp.mixture],
-                                 weights=[comp.geometry.volume for comp in rod.components()
-                                          if U235 in comp.mixture]) for rod in rods)
+    return 1e24 * max(
+        np.average(
+            [
+                comp.mixture.get(isotope)
+                for comp in rod.components()
+                if U235 in comp.mixture
+            ],
+            weights=[
+                comp.geometry.volume
+                for comp in rod.components()
+                if U235 in comp.mixture
+            ],
+        )
+        for rod in rods
+    )

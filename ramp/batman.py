@@ -1,16 +1,18 @@
-"""The Batman object is in charge of the burnup of core states.
+"""The Batman object is in charge of the burnup of core states."""
 
-"""
 from datetime import timedelta
-from typing import Tuple, Optional, Callable, Sequence
+from typing import Optional, Callable, Sequence
 
 from batman import BurnResult, Configuration
 from coreoperator.operational_state import OperationalState
 
 from corecompute.query import VolumeQuery, ReactionScore
-from ramp.backends.burnup import BurnupModel, ReactionModel, \
-    _partitions_heuristics
-from ramp.runners.burnup_runner import run_burnup, run_burnup_to_k
+from ramp.backends.burnup import (
+    BurnupModel,
+    ReactionModel,
+    batman_partitions_heuristics,
+)
+from ramp.backends.burnup import run_burnup, run_burnup_to_k
 from corecompute.result import PCM
 from toolz import groupby
 
@@ -25,10 +27,14 @@ class Batman:
 
     """
 
-    def __init__(self, *, config: Configuration,
-                 burnup_model: ModelFunc,
-                 partition_func: Callable[[int], int] = _partitions_heuristics,
-                 minimal_reactivity_tolerance: PCM = 0):
+    def __init__(
+        self,
+        *,
+        config: Configuration,
+        burnup_model: ModelFunc,
+        partition_func: Callable[[int], int] = batman_partitions_heuristics,
+        minimal_reactivity_tolerance: PCM = 0,
+    ):
         """
         Parameters
         ----------
@@ -53,8 +59,9 @@ class Batman:
         state - State to decay
 
         """
-        return {name: (dec, []) for name, (dec, reac) in
-                self.burnup_model(state).items()}
+        return {
+            name: (dec, []) for name, (dec, reac) in self.burnup_model(state).items()
+        }
 
     def queries(self, state: OperationalState) -> Sequence[VolumeQuery]:
         """Returns the sequence of reaction queries one must perform to have the
@@ -68,32 +75,47 @@ class Batman:
         model = self.burnup_model(state)
         grouped_set = groupby(lambda k: frozenset(model[k][1]), model.keys())
         grouped = {model[seq[0]][1]: seq for seq in grouped_set.values()}
-        return tuple(VolumeQuery(tuple(components),
-                                 tuple(ReactionScore(reaction, volume_specific=True,
-                                                density_specific=True)
-                                       for reaction in reactions))
-                     for reactions, components in grouped.items())
+        return tuple(
+            VolumeQuery(
+                tuple(components),
+                tuple(
+                    ReactionScore(reaction, volume_specific=True, density_specific=True)
+                    for reaction in reactions
+                ),
+            )
+            for reactions, components in grouped.items()
+        )
 
-    def __call__(self, state: OperationalState, *,
-                 k0: Optional[float] = None,
-                 rates: ReactionModel,
-                 time: timedelta) -> Tuple[OperationalState, BurnResult]:
-        model = (self.burnup_model(state) if state.power_nuc
-                 else self.decay_model(state))
-        return run_burnup(state,
-                          k0=k0,
-                          burnup_model=model,
-                          rates=rates,
-                          time=time,
-                          config=self.config,
-                          partition_func=self.partition_func)
+    def __call__(
+        self,
+        state: OperationalState,
+        *,
+        k0: Optional[float] = None,
+        rates: ReactionModel,
+        time: timedelta,
+    ) -> tuple[OperationalState, BurnResult]:
+        model = self.burnup_model(state) if state.power_nuc else self.decay_model(state)
+        return run_burnup(
+            state=state,
+            k0=k0,
+            burnup_model=model,
+            rates=rates,
+            time=time,
+            config=self.config,
+            partition_func=self.partition_func,
+        )
 
-    def burn_pcm(self, state: OperationalState, *,
-                 rates: ReactionModel,
-                 maximal_timestep: timedelta,
-                 k: float, drho: PCM, rho_tol: PCM,
-                 guess: Optional[timedelta] = None) -> \
-            Tuple[OperationalState, BurnResult]:
+    def burn_pcm(
+        self,
+        state: OperationalState,
+        *,
+        rates: ReactionModel,
+        maximal_timestep: timedelta,
+        k: float,
+        drho: PCM,
+        rho_tol: PCM,
+        guess: Optional[timedelta] = None,
+    ) -> tuple[OperationalState, BurnResult]:
         """Perform burnup on the state such that the new state has lost a given
         amount of PCM.
 
@@ -117,10 +139,11 @@ class Batman:
             k0=k,
             k=target,
             k_tol=k_tol(target, max(rho_tol, self.minimal_reactivity_tol)),
-            maximal_timestep=maximal_timestep,
+            maxt=maximal_timestep,
             config=self.config,
             guess=guess,
-            partition_func=self.partition_func)
+            partition_func=self.partition_func,
+        )
 
 
 def k_tol(k: float, rho_tol: PCM) -> float:
@@ -133,7 +156,7 @@ def k_tol(k: float, rho_tol: PCM) -> float:
     rho_tol - The reactivity tolerance around k.
 
     """
-    return (k ** 2) * rho_tol * 1e-5
+    return (k**2) * rho_tol * 1e-5
 
 
 def k_target(k: float, drho: PCM) -> float:
@@ -146,4 +169,4 @@ def k_target(k: float, drho: PCM) -> float:
     drho - Desired change in reactivity, in PCM.
 
     """
-    return 1. / (1. / k + drho * 1e-5)
+    return 1.0 / (1.0 / k + drho * 1e-5)

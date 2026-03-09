@@ -3,6 +3,7 @@ of its water content, and seeing the reactivity shift, divided by 2.
 Therefore, it shows the reactivity swing per percent void.
 
 """
+
 from functools import partial
 
 from coreoperator import OperationalState
@@ -14,11 +15,13 @@ delayed = partial(impure_delayed, pure=True)
 kquery = KQuery()
 
 
-def void_coefficient(state: OperationalState, *,
-                     calculator: DelayedOracleFunc,
-                     void: float = 0.02,
-                     prefix: str = ''
-                     ) -> PCMAndError:
+def void_coefficient(
+    state: OperationalState,
+    *,
+    calculator: DelayedOracleFunc,
+    void: float = 0.02,
+    prefix: str = "",
+) -> PCMAndError:
     """The void coefficient of this core, i.e. what the reactivity change
     is if the core uniformly loses 1% of its water to void.
 
@@ -37,10 +40,11 @@ def void_coefficient(state: OperationalState, *,
 
     """
 
-    states = (state,
-              delayed(state.new_water_density_factor)(factor=1.-void))
-    prefixes = (prefix + f'_{name}' for name in ('regular', 'voided'))
-    refres, voidres = [calculator(_state, kquery, prefix=_prefix)
-                       for _state, _prefix in zip(states, prefixes)]
+    states = (state, delayed(state.new_water_density_factor)(factor=1.0 - void))
+    prefixes = (prefix + f"_{name}" for name in ("regular", "voided"))
+    refres, voidres = [
+        calculator(_state, kquery, prefix=_prefix)
+        for _state, _prefix in zip(states, prefixes)
+    ]
     worth = delayed(diff)(voidres, refres)
     return worth / (100 * void)

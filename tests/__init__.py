@@ -1,3 +1,1 @@
-"""Testing subpackage. Should never be imported from externally!!!
-
-"""
+"""Testing subpackage. Should never be imported from externally!!!"""
