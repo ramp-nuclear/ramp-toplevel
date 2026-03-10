@@ -1,24 +1,25 @@
 from functools import partial
 from itertools import accumulate, chain, pairwise
 from operator import itemgetter, matmul
-from typing import Sequence, Optional, Any, Callable
+from typing import Any, Callable, Optional, Sequence
 
+from corecompute.query import KQuery
 from coreoperator import OperationalState
 from coreoperator.mobilization import (
-    Scheme,
+    CyclicShuffle,
     GridAction,
-    Remove,
     LoadChain,
     LoadSite,
-    CyclicShuffle,
+    Remove,
+    Scheme,
 )
 from dask import delayed
 from dask.delayed import Delayed
 from more_itertools import last
 from multipledispatch import dispatch
-from ramp.state_analysis.util import PCMAndError, OracleFuncFull, OracleFunc, pcm_err
-from corecompute.query import KQuery
 from toolz import identity
+
+from ramp.state_analysis.util import OracleFunc, OracleFuncFull, PCMAndError, pcm_err
 
 BasicAction = Remove | LoadSite
 
@@ -29,9 +30,7 @@ def decompose_action(action: Remove, state: OperationalState) -> Sequence[BasicA
 
 
 @dispatch(LoadChain, OperationalState)
-def decompose_action(
-    action: LoadChain, state: OperationalState
-) -> Sequence[BasicAction]:
+def decompose_action(action: LoadChain, state: OperationalState) -> Sequence[BasicAction]:  # noqa
     """
     Decompose a load chain into a sequence of removals and insertions
     according to the minimalistic order of events in the application of a
@@ -42,9 +41,7 @@ def decompose_action(
     transforms = list(map(itemgetter(1), action.sites))
     grid = state.core.grid
     steps = [Remove((last(sites),))]
-    for (site, previous_site), transform in zip(
-        pairwise(reversed(sites)), reversed(transforms[1:])
-    ):
+    for (site, previous_site), transform in zip(pairwise(reversed(sites)), reversed(transforms[1:])):
         rod = grid[previous_site]
         factory = partial(identity, rod)
         factory.__name__ = f"rod_previously_at_{previous_site}"
@@ -55,12 +52,8 @@ def decompose_action(
 
 
 @dispatch(CyclicShuffle, OperationalState)
-def decompose_action(
-    action: CyclicShuffle, state: OperationalState
-) -> Sequence[BasicAction]:
-    raise NotImplementedError(
-        f"decomposing an action is not implementedfor actions of type: {type(action)}"
-    )
+def decompose_action(action: CyclicShuffle, state: OperationalState) -> Sequence[BasicAction]:  # noqa
+    raise NotImplementedError(f"decomposing an action is not implementedfor actions of type: {type(action)}")
 
 
 @dispatch(LoadChain)
@@ -73,9 +66,7 @@ def _decomposition_length(action: GridAction):
     return 1
 
 
-def intermediate_schemes(
-    scheme: Scheme, state: OperationalState, initial: bool = True
-) -> list[Scheme]:
+def intermediate_schemes(scheme: Scheme, state: OperationalState, initial: bool = True) -> list[Scheme]:
     """
     Decompose a scheme that defines some shuffling procedure to a series of
     schemes such that each decomposed scheme serves as a model to some
@@ -132,9 +123,7 @@ def stepwise_shuffle_characteristic(
     """
     state = state if isinstance(state, Delayed) else delayed(state)
     intermediate_schemes_num = _intermediate_schemes_length(scheme, initial=initial)
-    schemes = delayed(intermediate_schemes, nout=intermediate_schemes_num)(
-        scheme, state, initial=initial
-    )
+    schemes = delayed(intermediate_schemes, nout=intermediate_schemes_num)(scheme, state, initial=initial)
 
     @delayed
     def _post_shuffle_characteristic(_state: OperationalState, _scheme: Scheme) -> Any:
@@ -180,6 +169,4 @@ def stepwise_shuffle_reactivity(
     def _reactivity(_state: OperationalState) -> PCMAndError:
         return pcm_err(calculator(_state, KQuery(), prefix=prefix))
 
-    return stepwise_shuffle_characteristic(
-        state, scheme, characteristic=_reactivity, initial=initial
-    )
+    return stepwise_shuffle_characteristic(state, scheme, characteristic=_reactivity, initial=initial)

@@ -3,6 +3,4 @@ calculations for nuclear cores and general reactor analysis.
 
 """
 
-import ramp.config
-
 __version__ = "0.0.1"

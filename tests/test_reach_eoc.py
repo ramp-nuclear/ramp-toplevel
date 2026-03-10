@@ -10,8 +10,8 @@ from hypothesis import given, settings
 
 from ramp.regime.regime import Regime
 from ramp.search.eoc import find_eoc
-from .mocks import FakeState, _except_v, FakeOracle, FakeOracleNoisy, FakeBatman
 
+from .mocks import FakeBatman, FakeOracle, FakeOracleNoisy, FakeState, _except_v
 
 slow = pytest.mark.slow
 logger = logging.getLogger(__name__)

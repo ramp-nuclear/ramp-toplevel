@@ -4,14 +4,14 @@ from functools import partial
 from pathlib import PurePath
 from typing import Callable
 
+from corecompute.query import KQuery
 from coremaker.materials.water import _H2O
 from coremaker.tree import Node
 from coreoperator import OperationalState
 from dask import delayed as impure_delayed
 from isotopes import U235
-from corecompute.query import KQuery
 
-from .util import PCMAndError, diff, DelayedOracleFunc
+from .util import DelayedOracleFunc, PCMAndError, diff
 
 ValueAndError = tuple[float, float]
 delayed = partial(impure_delayed, pure=True)
@@ -31,10 +31,7 @@ def _temperature_coefficient(
 ) -> PCMAndError:
     states = [delayed(state_factory)(temp) for temp in (hot_temp, cold_temp)]
     prefixes = (prefix + f"_{name}" for name in ("hot", "cold"))
-    hotres, coldres = [
-        calculator(_state, kquery, prefix=_prefix)
-        for _state, _prefix in zip(states, prefixes)
-    ]
+    hotres, coldres = [calculator(_state, kquery, prefix=_prefix) for _state, _prefix in zip(states, prefixes)]
     worth = delayed(diff)(hotres, coldres)
     return worth / (hot_temp - cold_temp)
 
@@ -107,9 +104,7 @@ def water_temperature_coefficient(
 
     """
     return _temperature_coefficient(
-        partial(
-            state.new_water_temperature, water_density_strategy=water_density_strategy
-        ),
+        partial(state.new_water_temperature, water_density_strategy=water_density_strategy),
         calculator=calculator,
         prefix=prefix,
         hot_temp=hot_temperature,

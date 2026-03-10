@@ -6,10 +6,11 @@ Therefore, it shows the reactivity swing per percent void.
 
 from functools import partial
 
+from corecompute.query import KQuery
 from coreoperator import OperationalState
 from dask import delayed as impure_delayed
-from ramp.state_analysis.util import PCMAndError, diff, DelayedOracleFunc
-from corecompute.query import KQuery
+
+from ramp.state_analysis.util import DelayedOracleFunc, PCMAndError, diff
 
 delayed = partial(impure_delayed, pure=True)
 kquery = KQuery()
@@ -42,9 +43,6 @@ def void_coefficient(
 
     states = (state, delayed(state.new_water_density_factor)(factor=1.0 - void))
     prefixes = (prefix + f"_{name}" for name in ("regular", "voided"))
-    refres, voidres = [
-        calculator(_state, kquery, prefix=_prefix)
-        for _state, _prefix in zip(states, prefixes)
-    ]
+    refres, voidres = [calculator(_state, kquery, prefix=_prefix) for _state, _prefix in zip(states, prefixes)]
     worth = delayed(diff)(voidres, refres)
     return worth / (100 * void)

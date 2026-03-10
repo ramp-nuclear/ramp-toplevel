@@ -2,7 +2,6 @@
 
 from typing import Callable
 
-
 __all__ = ["append_doc_of"]
 
 

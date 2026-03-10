@@ -1,6 +1,6 @@
 """A tool used to create operational states from nothing."""
 
-from typing import TypeVar, Generic
+from typing import Generic, TypeVar
 
 from coreoperator.operational_state import OperationalState
 

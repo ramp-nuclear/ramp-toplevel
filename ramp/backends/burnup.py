@@ -1,22 +1,21 @@
 """Tools for running the burnup code."""
 
 from datetime import timedelta
-from typing import Sequence, Optional, Callable, Iterable
 from pathlib import PurePath
+from typing import Callable, Iterable, Optional, Sequence
 
 from batman.graphs import DecayGraph, GraphFilter
 from batman.solver import (
-    InputData,
-    DistEasyData,
-    timestep_constant_power,
-    step_desired_k_at_power,
-    Configuration,
     BurnResult,
+    Configuration,
+    DistEasyData,
+    InputData,
+    step_desired_k_at_power,
+    timestep_constant_power,
 )
 from batman.units import Second
 from coreoperator.operational_state import OperationalState
 from reactions import Reaction, ReactionRate
-
 
 BurnupModel = dict[str, tuple[DecayGraph, Sequence[Reaction]]]
 ReactionModel = dict[str, dict[Reaction, ReactionRate]]
@@ -42,17 +41,14 @@ def _pre_exec_burnup(
     components = [named_components[name] for name in burnup_model]
     decay_models = [decay_graph for decay_graph, _ in burnup_model.values()]
     reaction_models = [
-        [rates[name][reaction] for reaction in reactions]
-        for name, (_, reactions) in burnup_model.items()
+        [rates[name][reaction] for reaction in reactions] for name, (_, reactions) in burnup_model.items()
     ]
     volumes = [c.geometry.volume for c in components]
     assert all(vol > 0 for vol in volumes)
     mixtures = [c.mixture for c in components]
     filters = [NULLFILTER for _ in components]
     inputdata = InputData(decay_models, reaction_models, filters, mixtures, volumes)
-    data = DistEasyData.from_input(
-        inputdata, partitions=partition_func(len(burnup_model))
-    )
+    data = DistEasyData.from_input(inputdata, partitions=partition_func(len(burnup_model)))
     return power, burnup_model.keys(), data
 
 
@@ -85,9 +81,7 @@ def run_burnup(
         rates=rates,
         partition_func=partition_func,
     )
-    mixtures, info = timestep_constant_power(
-        data, power, time.total_seconds(), config=config, k0=k0
-    )
+    mixtures, info = timestep_constant_power(data, power, time.total_seconds(), config=config, k0=k0)
     return state.burnup(mixtures=dict(zip(names, mixtures)), time=time), info
 
 

@@ -4,17 +4,17 @@ import re
 from abc import abstractmethod
 from functools import partial
 from pathlib import PurePath
-from typing import Protocol, Union, Optional, Callable, Sequence
+from typing import Callable, Optional, Protocol, Sequence, Union
 
 import uncertainties
-from coreoperator import OperationalState
-from toolz import compose, juxt
-from dask import delayed as unpure_delayed
-from numpy import floor, log10, negative, interp
 from corecompute.oracle import OracleResult
-from corecompute.result import KResult
 from corecompute.query import KQuery, Query
-from uncertainties import ufloat, std_dev, nominal_value
+from corecompute.result import KResult
+from coreoperator import OperationalState
+from dask import delayed as unpure_delayed
+from numpy import floor, interp, log10, negative
+from toolz import compose, juxt
+from uncertainties import nominal_value, std_dev, ufloat
 
 __all__ = [
     "PCMAndError",
@@ -149,14 +149,10 @@ def invert(y_target: float, x: Sequence[float], y: Sequence[float]) -> float:
     0.7
     """
     if not min(y) <= y_target <= max(y):
-        raise ValueError(
-            "The target y value is not within the range of the input graph."
-        )
+        raise ValueError("The target y value is not within the range of the input graph.")
     if len(x) != len(y):
         raise ValueError(
-            "The input x and y sequences are not of the same "
-            "length, and thus do not represent a "
-            "function's graph."
+            "The input x and y sequences are not of the same length, and thus do not represent a function's graph."
         )
     return interp(y_target, xp=y, fp=x).item()
 
@@ -197,9 +193,7 @@ def decompose_ufloats(
 
 
 class OracleFuncFull(Protocol):
-    def __call__(
-        self, state: OperationalState, *queries: Query, prefix: str = ""
-    ) -> OracleResult: ...
+    def __call__(self, state: OperationalState, *queries: Query, prefix: str = "") -> OracleResult: ...
 
 
 OracleFunc = Callable[[OperationalState], KResult]

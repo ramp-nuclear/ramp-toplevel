@@ -1,20 +1,21 @@
 """The Batman object is in charge of the burnup of core states."""
 
 from datetime import timedelta
-from typing import Optional, Callable, Sequence
+from typing import Callable, Optional, Sequence
 
 from batman import BurnResult, Configuration
+from corecompute.query import ReactionScore, VolumeQuery
+from corecompute.result import PCM
 from coreoperator.operational_state import OperationalState
+from toolz import groupby
 
-from corecompute.query import VolumeQuery, ReactionScore
 from ramp.backends.burnup import (
     BurnupModel,
     ReactionModel,
     batman_partitions_heuristics,
+    run_burnup,
+    run_burnup_to_k,
 )
-from ramp.backends.burnup import run_burnup, run_burnup_to_k
-from corecompute.result import PCM
-from toolz import groupby
 
 ModelFunc = Callable[[OperationalState], BurnupModel]
 
@@ -59,9 +60,7 @@ class Batman:
         state - State to decay
 
         """
-        return {
-            name: (dec, []) for name, (dec, reac) in self.burnup_model(state).items()
-        }
+        return {name: (dec, []) for name, (dec, reac) in self.burnup_model(state).items()}
 
     def queries(self, state: OperationalState) -> Sequence[VolumeQuery]:
         """Returns the sequence of reaction queries one must perform to have the
@@ -78,10 +77,7 @@ class Batman:
         return tuple(
             VolumeQuery(
                 tuple(components),
-                tuple(
-                    ReactionScore(reaction, volume_specific=True, density_specific=True)
-                    for reaction in reactions
-                ),
+                tuple(ReactionScore(reaction, volume_specific=True, density_specific=True) for reaction in reactions),
             )
             for reactions, components in grouped.items()
         )

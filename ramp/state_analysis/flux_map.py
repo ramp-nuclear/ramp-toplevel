@@ -1,25 +1,26 @@
 from functools import partial
-from itertools import starmap, chain
-from operator import itemgetter, contains, attrgetter
+from itertools import chain, starmap
+from operator import attrgetter, contains, itemgetter
 from pathlib import PurePath
-from typing import Literal, Generator, Iterable, Sequence
+from typing import Generator, Iterable, Literal, Sequence
 
 import numpy as np
 import pandas as pd
 import xarray as xr
-from coremaker.core import Core, TREE_NAME
-from coremaker.elements.box import split_box_inside_tree, PICTURE_PATH
+from corecompute.query import Score, VolumeQuery
+from corecompute.query.meshquery import MeshQuery, eV
+from corecompute.result import MeshResult, VolumeResult
+from coremaker.core import TREE_NAME, Core
+from coremaker.elements.box import PICTURE_PATH, split_box_inside_tree
 from coremaker.elements.util import split
 from coremaker.geometries import Box
 from coremaker.mesh import CartesianMesh
 from coremaker.protocols.geometry import Geometry, UnionGeometry
 from coremaker.tree import Tree
 from coreoperator import OperationalState
-from toolz import valmap, compose
+from toolz import compose, valmap
+
 from ramp.state_analysis.util import OracleFuncFull
-from corecompute.query import Score, VolumeQuery
-from corecompute.query.meshquery import MeshQuery, eV
-from corecompute.result import MeshResult, VolumeResult
 
 cm = float
 
@@ -82,9 +83,7 @@ def cartesian_flux_map(
     return meshresult.array
 
 
-def _splitting_children(
-    tree: Tree, split_path: PurePath
-) -> Generator[PurePath, None, None]:
+def _splitting_children(tree: Tree, split_path: PurePath) -> Generator[PurePath, None, None]:
     paths = filter(
         lambda p: p.name != PICTURE_PATH.name,
         map(itemgetter(0), tree.inclusive[split_path]),
@@ -154,10 +153,7 @@ def _interpret_flux_map(core, results: Sequence[VolumeResult]) -> xr.Dataset:
     # rounding the centers to identify identical points, to a resolution of
     # 1e-10 cm
     x, y, z = np.round(np.vstack(centers).T, decimals=10)
-    energies = (
-        np.inf if result.upper_energy is None else result.upper_energy
-        for result in results
-    )
+    energies = (np.inf if result.upper_energy is None else result.upper_energy for result in results)
     means = map(attrgetter("value"), results)
     stds = map(attrgetter("error"), results)
     # Choosing the column names to fit the output of a MeshQuery
@@ -239,10 +235,7 @@ def component_flux_map(
     match method:
         case "mesh":
             if not all(_boundable(node.geometry) for node in nodes.values()):
-                raise ValueError(
-                    "It is required that the supplied components"
-                    "will have a bounding box for meshing."
-                )
+                raise ValueError("It is required that the supplied componentswill have a bounding box for meshing.")
             core: Core = state.core
             # constructing the bounding boxes in the absolute coordinates of the
             # core model.
@@ -251,15 +244,10 @@ def component_flux_map(
                 for component, node in nodes.items()
             )
             # noinspection PyTypeChecker
-            grids = (
-                _mesh(*_limits(bounding_box), resolution)
-                for bounding_box in bounding_boxes
-            )
+            grids = (_mesh(*_limits(bounding_box), resolution) for bounding_box in bounding_boxes)
             meshes = starmap(CartesianMesh, grids)
             queries = {
-                component: MeshQuery(
-                    mesh=mesh, scores=scores, energies=energies, **kwargs
-                )
+                component: MeshQuery(mesh=mesh, scores=scores, energies=energies, **kwargs)
                 for component, mesh in zip(components, meshes)
             }
             # The oracle returns a list of length 1 for mesh queries.
@@ -268,15 +256,10 @@ def component_flux_map(
 
         case "split":
             if not all(isinstance(node.geometry, Box) for node in nodes.values()):
-                raise ValueError(
-                    "It is required that the supplied components"
-                    "will have the exterior shape of a box."
-                )
+                raise ValueError("It is required that the supplied componentswill have the exterior shape of a box.")
             core, paths = split_core(state.core, components, resolution)
             combined_paths = tuple(chain.from_iterable(paths.values()))
-            query = VolumeQuery(
-                names=combined_paths, scores=scores, energies=energies, **kwargs
-            )
+            query = VolumeQuery(names=combined_paths, scores=scores, energies=energies, **kwargs)
             results = calculator(state.copy(core=core), query)[query]
             results = {
                 component: list(

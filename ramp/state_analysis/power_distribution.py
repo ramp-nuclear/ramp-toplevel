@@ -4,14 +4,15 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
+from corecompute.query import KQuery, VolumeQuery
+from corecompute.query.score import SUPPORTED_SCORE, Score
+from corecompute.result import EnergyMap, KResult
 from coreoperator import OperationalState
 from dask import delayed as unpure_delayed
 from isotopes import U235
+
 from ramp.state_analysis.control_rod_worth import DelayedOracleFunc
 from ramp.state_analysis.util import split_name
-from corecompute.query import KQuery, VolumeQuery
-from corecompute.query.score import Score, SUPPORTED_SCORE
-from corecompute.result import EnergyMap, KResult
 
 delayed = partial(unpure_delayed, pure=True)
 __all__ = ["ppf", "ppf_and_k", "power_map"]
@@ -41,9 +42,7 @@ def _analyze_radial_pff(
         },
         orient="index",
     )
-    grouped = df.groupby(["site", "label"]).apply(
-        lambda x: pd.Series({"power": np.average(x["power"])})
-    )
+    grouped = df.groupby(["site", "label"]).apply(lambda x: pd.Series({"power": np.average(x["power"])}))
     power = grouped["power"]
     site, label = power.idxmax()
     return site, label, power[site, label] / power.mean()
@@ -118,9 +117,7 @@ def power_map(
     @delayed
     def _query(state):
         return VolumeQuery(
-            tuple(
-                name for name, cmp in state.core.named_components if U235 in cmp.mixture
-            ),
+            tuple(name for name, cmp in state.core.named_components if U235 in cmp.mixture),
             scores=(Score(power_computation_score, volume_specific=True),),
         )
 

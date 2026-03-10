@@ -1,14 +1,15 @@
 from operator import itemgetter
 from typing import Iterable
 
+from corecompute.oracle import OracleResult
+from corecompute.query import KQuery
 from coremaker.protocols.grid import Site
 from coreoperator import OperationalState
-from coreoperator.mobilization import Scheme, Remove
+from coreoperator.mobilization import Remove, Scheme
 from dask import delayed
 from dask.delayed import Delayed
-from corecompute.oracle import OracleResult
-from ramp.state_analysis.util import PCMAndError, diff, OracleFuncFull, OracleFunc
-from corecompute.query import KQuery
+
+from ramp.state_analysis.util import OracleFunc, OracleFuncFull, PCMAndError, diff
 
 
 def rods_extraction_worth(
@@ -38,9 +39,7 @@ def rods_extraction_worth(
 
     state = state if isinstance(state, Delayed) else delayed(state)
     delayed_all_inserted_kresult = delayed(calculator)(state, kquery, prefix=prefix)
-    delayed_rodless_kresults = {
-        site: calc_reactivity_after_removal(state, site) for site in sites
-    }
+    delayed_rodless_kresults = {site: calc_reactivity_after_removal(state, site) for site in sites}
     delayed_diff = delayed(diff)
     return {
         site: delayed_diff(delayed_rodless_kresult, delayed_all_inserted_kresult)
@@ -63,9 +62,7 @@ def maximal_rod_worth(
     calculator - function that computes the reactivity
     prefix - String used in the workspace directory.
     """
-    rod_worths = rods_extraction_worth(
-        state, sites, calculator=calculator, prefix=prefix
-    )
+    rod_worths = rods_extraction_worth(state, sites, calculator=calculator, prefix=prefix)
 
     def _max_worth(m: dict[Site, PCMAndError]) -> tuple[Site, PCMAndError]:
         site, worth = max(m.items(), key=itemgetter(1))

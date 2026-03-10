@@ -10,18 +10,19 @@ from contextlib import nullcontext
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import PurePath
-from typing import Sequence, Optional, Callable, ContextManager
+from typing import Callable, ContextManager, Optional, Sequence
 
 from batman import BurnResult
+from corecompute.oracle import Oracle
+from corecompute.query import KQuery, ReactionScore, VolumeQuery
+from corecompute.result import PCM, KResult, VolumeResult
 from coreoperator.operational_state import OperationalState
 from dask import compute, delayed
 from more_itertools import difference
+from reactions import Reaction, ReactionRate
+
 from ramp.backends.burnup import ReactionModel
 from ramp.batman import Batman
-from corecompute.oracle import Oracle
-from corecompute.query import VolumeQuery, ReactionScore, KQuery
-from corecompute.result import PCM, KResult, VolumeResult
-from reactions import Reaction, ReactionRate
 
 logger = logging.getLogger(__name__)
 
@@ -84,18 +85,14 @@ class Regime:
 
         """
         if step > self.maximal_timestep:
-            raise ValueError(
-                f"{step=} is larger than maximal_timestep={self.maximal_timestep}."
-            )
+            raise ValueError(f"{step=} is larger than maximal_timestep={self.maximal_timestep}.")
         if step < timedelta(0):
             raise ValueError(f"{step=} must be positive")
         kresult, rates = self._calc_state(state, **oracle_kwargs)
         with self.batman_context():
             return self.batman(state, rates=rates, time=step, k0=kresult.k)
 
-    def decay(
-        self, state: OperationalState, time: timedelta
-    ) -> tuple[OperationalState, BurnResult]:
+    def decay(self, state: OperationalState, time: timedelta) -> tuple[OperationalState, BurnResult]:
         """Decay the core at 0 power.
 
         Parameters
@@ -153,21 +150,14 @@ class Regime:
     def get_kwild(self, state: OperationalState) -> KResult:
         """Return the KResult for the state at its least compensated state."""
         kwild, _ = self._calc_state(state)
-        logger.info(
-            f"At {self._time_since_boc(state)} since boc, "
-            f"the wild reactivity is {kwild.reactivity}."
-        )
+        logger.info(f"At {self._time_since_boc(state)} since boc, the wild reactivity is {kwild.reactivity}.")
         return kwild
 
-    def _calc_state(
-        self, state: OperationalState, **oracle_kwargs
-    ) -> tuple[KResult, ReactionModel]:
+    def _calc_state(self, state: OperationalState, **oracle_kwargs) -> tuple[KResult, ReactionModel]:
         logger.info(f"Computing reaction rates of {state}")
         with self.oracle_context():
             (results,) = compute(
-                delayed(reaction_rates_calculator)(
-                    state, self.oracle, self.batman.queries, **oracle_kwargs
-                )
+                delayed(reaction_rates_calculator)(state, self.oracle, self.batman.queries, **oracle_kwargs)
             )
         return results
 
@@ -210,17 +200,13 @@ def reaction_rates_calculator(
         match rate:
             case VolumeResult(
                 component=component,
-                score=ReactionScore(
-                    reaction=reaction, volume_specific=True, density_specific=True
-                ),
+                score=ReactionScore(reaction=reaction, volume_specific=True, density_specific=True),
                 value=value,
                 error=error,
                 particle="neutron",
                 upper_energy=None,
                 lower_energy=None,
             ):
-                rates[component][reaction] = ReactionRate(
-                    component, reaction, value, error
-                )
+                rates[component][reaction] = ReactionRate(component, reaction, value, error)
 
     return results[kquery][0], dict(rates)

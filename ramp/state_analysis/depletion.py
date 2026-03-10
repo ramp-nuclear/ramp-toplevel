@@ -11,9 +11,10 @@ from coremaker.core import Site
 from coremaker.protocols.component import Component
 from coremaker.protocols.element import Element
 from coreoperator import OperationalState
-from isotopes import avogadro, Isotope, U235, ZAID
-from ramp.state_analysis.util import split_name
+from isotopes import U235, ZAID, Isotope, avogadro
 from scipy.constants import gram
+
+from ramp.state_analysis.util import split_name
 
 PerCmBarn = float
 kg = float
@@ -52,11 +53,7 @@ def maximal_local_depletion(
 
     """
     name, min_u235_nd = min(
-        (
-            (name, comp.mixture.get(U235))
-            for name, comp in state.core.named_components
-            if isfuel(comp)
-        ),
+        ((name, comp.mixture.get(U235)) for name, comp in state.core.named_components if isfuel(comp)),
         key=itemgetter(1),
     )
     return name, _depletion(min_u235_nd, initial_nd)
@@ -143,9 +140,7 @@ def maximal_fission_density(
         orient="index",
     )
     grouped = df.groupby(["site", "label"]).apply(
-        lambda x: pd.Series(
-            {"fission density": np.average(x["fission density"], weights=x["vol"])}
-        )
+        lambda x: pd.Series({"fission density": np.average(x["fission density"], weights=x["vol"])})
     )
     fission_density = grouped["fission density"]
     site, label = fission_density.idxmax()
@@ -163,10 +158,7 @@ def rod_amount(rod: Element, isotope: Isotope) -> kg:
     """
     return (
         sum(
-            comp.geometry.volume
-            * comp.mixture.get(isotope, 0.0)
-            * isotope.mass
-            / avogadro
+            comp.geometry.volume * comp.mixture.get(isotope, 0.0) * isotope.mass / avogadro
             for comp in rod.components()
             if comp.geometry.volume is not None
         )
@@ -196,10 +188,7 @@ def depletion_map(state: OperationalState, freshmap: MapAid) -> dict[str, float]
     The depletion as a fraction in each site data is given for.
 
     """
-    return {
-        site: float(_rod_depletion(state.core.grid[site], fresh, iso))
-        for site, (iso, fresh) in freshmap.items()
-    }
+    return {site: float(_rod_depletion(state.core.grid[site], fresh, iso)) for site, (iso, fresh) in freshmap.items()}
 
 
 def print_depletion_map(state: OperationalState, freshmap: MapAid) -> None:
@@ -219,12 +208,7 @@ def print_depletion_map(state: OperationalState, freshmap: MapAid) -> None:
     pmap = [[depmap.get(f"{letter}{row}", "-") for letter in letters] for row in rows]
     print("%7s" % "" + " ".join("%4s   " % letter for letter in letters))
     for i, row in enumerate(pmap):
-        print(
-            "%4d   " % i
-            + " ".join(
-                f"{dep:7.2%}" if isinstance(dep, float) else "   -   " for dep in row
-            )
-        )
+        print("%4d   " % i + " ".join(f"{dep:7.2%}" if isinstance(dep, float) else "   -   " for dep in row))
 
 
 RodFactory = Callable[[], Element]
@@ -267,16 +251,8 @@ def average_unloaded_fission_density(
     rods = [state.core.grid[site] for site in sites]
     return 1e24 * max(
         np.average(
-            [
-                comp.mixture.get(isotope)
-                for comp in rod.components()
-                if U235 in comp.mixture
-            ],
-            weights=[
-                comp.geometry.volume
-                for comp in rod.components()
-                if U235 in comp.mixture
-            ],
+            [comp.mixture.get(isotope) for comp in rod.components() if U235 in comp.mixture],
+            weights=[comp.geometry.volume for comp in rod.components() if U235 in comp.mixture],
         )
         for rod in rods
     )

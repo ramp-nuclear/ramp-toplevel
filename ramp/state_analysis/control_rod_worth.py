@@ -4,21 +4,22 @@ To make things easier to Dask, just assume everything is delayed.
 
 """
 
-from typing import Iterable, Container, Optional, Sequence
+from typing import Container, Iterable, Optional, Sequence
 
+from corecompute.query import KQuery
 from coreoperator.operational_state import OperationalState
 from dask.delayed import Delayed, delayed
+
 from ramp.regime.controlled_regime import heightwise_characteristic
-from corecompute.query import KQuery
 
 from .common_states import cold_unpoisoned
 from .util import (
-    PCMAndError,
-    pcm_err,
-    diff,
-    OracleFuncFull,
-    OracleFunc,
     DelayedOracleFunc,
+    OracleFunc,
+    OracleFuncFull,
+    PCMAndError,
+    diff,
+    pcm_err,
 )
 
 degC = float
@@ -86,9 +87,7 @@ def moveable_reactivity_worth(
     A tuple of reactivity worth and error, in PCM
 
     """
-    results = s_curve(
-        state, alias, [extracted, inserted], calculator=calculator, prefix=prefix
-    )
+    results = s_curve(state, alias, [extracted, inserted], calculator=calculator, prefix=prefix)
     return results[inserted] - results[extracted]
 
 
@@ -150,14 +149,10 @@ def moveable_margin(
     shutdown margin (without taking inaccuracies into account).
 
     """
-    extracted = delayed(OperationalState.new_control_height)(
-        state, alias=all_alias, height=extracted
-    )
+    extracted = delayed(OperationalState.new_control_height)(state, alias=all_alias, height=extracted)
     cold = delayed(cold_unpoisoned)(extracted, temperature)
     insert = delayed(OperationalState.new_control_height)
-    inserted_cold_unpoisoned = [
-        insert(cold, alias=alias, height=inserted) for alias in aliases
-    ]
+    inserted_cold_unpoisoned = [insert(cold, alias=alias, height=inserted) for alias in aliases]
 
     @delayed
     def _calculator(_state, _prefix: str = ""):

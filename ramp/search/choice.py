@@ -1,13 +1,13 @@
 """Tools for running a bunch of function calls with scores to find the best one."""
 
-from operator import itemgetter
-from typing import Callable, Sequence, Any, Union
-from functools import partial
 import logging
-
-from dask import delayed
+from functools import partial
+from operator import itemgetter
+from typing import Any, Callable, Sequence, Union
 
 from coreoperator.operational_state import OperationalState
+from dask import delayed
+
 from ramp.factory import Factory, Seed
 
 ScoreFunc = Union[Callable[[OperationalState], Any], partial]
@@ -37,9 +37,7 @@ def best_choice(
     return seed, factory(seed), *data
 
 
-def _zip_score(
-    seed: Seed, factory: Factory[Seed], scoring: ScoreFunc
-) -> tuple[float, Seed, Any]:
+def _zip_score(seed: Seed, factory: Factory[Seed], scoring: ScoreFunc) -> tuple[float, Seed, Any]:
     state = factory(seed)
     score, *data = scoring(state)
     return score, seed, *data

@@ -2,41 +2,39 @@
 
 from datetime import timedelta
 from functools import partial
-from itertools import repeat, chain, starmap
+from itertools import chain, repeat, starmap
 from pathlib import PurePath
-from typing import Optional, Callable, Sequence, Iterable
+from typing import Callable, Iterable, Optional, Sequence
 
 import numpy as np
-from coremaker.core import Core, TREE_NAME
+from corecompute.oracle import Oracle
+from corecompute.query import KQuery
+from coremaker.core import TREE_NAME
 from coremaker.materials import Mixture
 from coremaker.protocols.geometry import Geometry
 from coremaker.transform import Transform, identity
-from coremaker.tree import Tree, Node, ChildType
+from coremaker.tree import ChildType, Node, Tree
 from coreoperator.operational_state import OperationalState
 from dask import delayed
 from dask.delayed import Delayed
-from isotopes import Xe135, ZAID
+from isotopes import ZAID, Xe135
 from scipy.constants import day
 
-from corecompute.oracle import Oracle
 from ramp.regime import Regime
 from ramp.regime.controlled_regime import heightwise_characteristic
 from ramp.search.eoc import (
     at_eoc_one_sigma,
-    risk_over,
-    max_safe_step_at_risk,
     find_eoc_from_boc,
+    max_safe_step_at_risk,
+    risk_over,
 )
 from ramp.state_analysis.util import invert, pcm_err
-from corecompute.query import KQuery
 
 degC = float
 ND = float
 
 
-def unpoisoned(
-    state: OperationalState, unpoison: Optional[dict[ZAID, ND]] = None
-) -> OperationalState:
+def unpoisoned(state: OperationalState, unpoison: Optional[dict[ZAID, ND]] = None) -> OperationalState:
     unpoison = unpoison or {Xe135: 0.0}
     return state.new_isotope_density(unpoison)
 
@@ -54,9 +52,7 @@ def eoc_from_boc(state: OperationalState, regime: Regime) -> OperationalState:
     at_eoc = partial(at_eoc_one_sigma, drho=100.0)
     risky = partial(risk_over, alpha=1e-8)
     safe_step = partial(max_safe_step_at_risk, alpha=1e-8)
-    find_eoc = partial(
-        find_eoc_from_boc, at_eoc=at_eoc, too_risky=risky, max_safe_step=safe_step
-    )
+    find_eoc = partial(find_eoc_from_boc, at_eoc=at_eoc, too_risky=risky, max_safe_step=safe_step)
     return find_eoc(state, regime=regime, rho=0.0)
 
 
@@ -67,9 +63,7 @@ def _divide_period(period: float, resolution: float) -> Iterable[timedelta]:
         yield timedelta(days=rest)
 
 
-def divide_periods(
-    periods: Iterable[float], resolutions: Iterable[float]
-) -> Sequence[timedelta]:
+def divide_periods(periods: Iterable[float], resolutions: Iterable[float]) -> Sequence[timedelta]:
     """
     Tool to divide the cycle operation time into time intervals of a specified
     resolution.
@@ -136,9 +130,7 @@ def midcycle_states(
     ti = state.history.cycle_time
     for time in times[:-1]:
         state, _ = regime.burnstep(state, time, **oracle_kwargs)
-        saver(
-            f"{(state.history.cycle_time - ti + t0).total_seconds() / day:.1f}", state
-        )
+        saver(f"{(state.history.cycle_time - ti + t0).total_seconds() / day:.1f}", state)
     state, _ = regime.burnstep(state, times[-1], **oracle_kwargs)
     saver("eoc", state)
     return state
@@ -177,11 +169,7 @@ def find_critical(
     def reactivity(_state):
         return pcm_err(oracle(_state, KQuery())).nominal_value
 
-    heightwise_reactivity = list(
-        heightwise_characteristic(
-            state, alias, guesses, characteristic=reactivity
-        ).values()
-    )
+    heightwise_reactivity = list(heightwise_characteristic(state, alias, guesses, characteristic=reactivity).values())
     height = delayed(invert)(0, guesses, heightwise_reactivity)
     return delayed(state.new_control_height)(alias, height)
 
@@ -224,9 +212,7 @@ def critical_heights_temp_xenon_variations(
 
     no_xenon = delayed(state.new_isotope_density)({Xe135: 0})
     HZP = find_critical(no_xenon, guesses, oracle, alias)
-    CZP = find_critical(
-        delayed(no_xenon.new_temperature)(cold_temp), guesses, oracle, alias
-    )
+    CZP = find_critical(delayed(no_xenon.new_temperature)(cold_temp), guesses, oracle, alias)
     return dict(HFP=state, HZP=HZP, CZP=CZP)
 
 
@@ -252,15 +238,10 @@ def encompassed(
     the specified geometry filled with the specified mixture
     """
     tree = Tree()
-    tree.nodes[ENCOMPASSING_PATH] = Node(
-        encompassing_geometry, mixture=mixture, transform=transform
-    )
+    tree.nodes[ENCOMPASSING_PATH] = Node(encompassing_geometry, mixture=mixture, transform=transform)
     new_core = state.core
     new_core._outer_geometry = encompassing_geometry
     tree.graft(new_core.tree, ENCOMPASSING_PATH, ChildType.exclusive)
     new_core.tree = tree
-    new_core.aliases = {
-        name: (alias[0], list(map(_realias, alias[1])))
-        for name, alias in new_core.aliases.items()
-    }
+    new_core.aliases = {name: (alias[0], list(map(_realias, alias[1]))) for name, alias in new_core.aliases.items()}
     return state.copy(core=new_core)

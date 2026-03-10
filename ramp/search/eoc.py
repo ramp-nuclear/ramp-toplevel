@@ -8,12 +8,12 @@ from statistics import NormalDist
 from typing import Callable, Optional
 
 import numpy as np
+from batman import BurnResult
+from corecompute.result import PCM, KResult
+from coreoperator.operational_state import OperationalState
 from scipy.constants import day
 
-from coreoperator.operational_state import OperationalState
-from batman import BurnResult
 from ramp.regime import Regime
-from corecompute.result import PCM, KResult
 from ramp.utils import PCMPerSecond
 
 logger = logging.getLogger(__name__)
@@ -66,9 +66,7 @@ def find_eoc_from_boc(
     )
 
 
-def _do_first_steps(
-    regime: Regime, state: OperationalState
-) -> tuple[OperationalState, KResult, BurnResult]:
+def _do_first_steps(regime: Regime, state: OperationalState) -> tuple[OperationalState, KResult, BurnResult]:
     info = BurnResult.empty()
     for step in regime.initial_steps:
         state, ninfo = regime.burnstep(state, step)
@@ -93,19 +91,13 @@ def _next_state(
     forward = kwild.reactivity > rho
     if (
         safe_reactivity is not None
-        and state.history.cycle_time.total_seconds()
-        != safe.history.cycle_time.total_seconds()
+        and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
     ):
         drhodt = (kwild.reactivity - safe_reactivity) / (
-            state.history.cycle_time.total_seconds()
-            - safe.history.cycle_time.total_seconds()
+            state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds()
         )
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
-    logger.info(
-        f"Stepping from {state.history.cycle_time} "
-        f"with a guess of {guess} "
-        f"reactivity is {kwild.reactivity} "
-    )
+    logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
     if forward:
         safe = safe if too_risky(kwild, rho) else state
         safe_reactivity = safe_reactivity if too_risky(kwild, rho) else kwild.reactivity
@@ -126,11 +118,7 @@ def _next_state(
         step = state.history.cycle_time + guess - safe.history.cycle_time
         if step > regime.maximal_timestep:
             step = step / 2
-        logger.info(
-            "Doing a step from the safe time "
-            f"{safe.history.cycle_time} to "
-            f"{safe.history.cycle_time + step}"
-        )
+        logger.info(f"Doing a step from the safe time {safe.history.cycle_time} to {safe.history.cycle_time + step}")
         if step < timedelta(0):
             raise ValueError(
                 f"Computed a negative {step=} for a desired {rho=} and an "
@@ -256,7 +244,7 @@ def max_safe_step_at_risk(
 
     dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
     y = dist.inv_cdf(alpha)
-    tseconds = ((rho_target - kres.reactivity - y) / drhodt)
+    tseconds = (rho_target - kres.reactivity - y) / drhodt
     return min(timedelta(seconds=tseconds) - minimal_timestep, op_max_timestep)
 
 

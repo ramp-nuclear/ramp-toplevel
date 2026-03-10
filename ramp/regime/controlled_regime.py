@@ -4,20 +4,21 @@ import logging
 from datetime import timedelta
 from operator import itemgetter
 from pathlib import PurePath
-from typing import Sequence, ContextManager, Any, Iterable, Callable
+from typing import Any, Callable, ContextManager, Iterable, Sequence
 
 from batman import BurnResult
+from corecompute.oracle import Oracle
+from corecompute.result import PCM, KResult
 from coreoperator.operational_state import OperationalState
-from toolz import compose, curry
-from dask import delayed, compute
+from dask import compute, delayed
 from dask.delayed import Delayed
+from reactions import Reaction, ReactionRate
+from toolz import compose, curry
+
 from ramp.backends.burnup import ReactionModel
 from ramp.batman import Batman
-from corecompute.oracle import Oracle
 from ramp.regime.regime import Regime, reaction_rates_calculator
-from corecompute.result import KResult, PCM
 from ramp.utils.docs import append_doc_of
-from reactions import Reaction, ReactionRate
 
 logger = logging.getLogger(__name__)
 DEFAULT_TOLERANCE = 3e3
@@ -54,15 +55,10 @@ def heightwise_characteristic(
 
 
 def critical_height(
-    results_per_height: dict[
-        float, [KResult, dict[PurePath, dict[Reaction, ReactionRate]]]
-    ],
+    results_per_height: dict[float, [KResult, dict[PurePath, dict[Reaction, ReactionRate]]]],
 ) -> float:
     crit_height, _ = min(
-        (
-            (height, abs(results[0].reactivity))
-            for height, results in results_per_height.items()
-        ),
+        ((height, abs(results[0].reactivity)) for height, results in results_per_height.items()),
         key=itemgetter(1),
     )
     return crit_height
@@ -120,9 +116,7 @@ class ControlledRegime(Regime):
         return self.get_controlled_state(new_state), info
 
     @append_doc_of(Regime.burn_to_pcm)
-    def burn_to_pcm(
-        self, state: OperationalState, **kwargs
-    ) -> tuple[OperationalState, BurnResult]:
+    def burn_to_pcm(self, state: OperationalState, **kwargs) -> tuple[OperationalState, BurnResult]:
         new_state, info = super().burn_to_pcm(state, **kwargs)
         return self.get_controlled_state(new_state), info
 
@@ -130,34 +124,23 @@ class ControlledRegime(Regime):
     def get_kwild(self, state: OperationalState) -> KResult:
         self.update_results_per_height(state)
         kwild = self.result_per_height[self.outside][0]
-        logger.info(
-            f"At {self._time_since_boc(state)} since boc, "
-            f"the wild reactivity is {kwild.reactivity}."
-        )
+        logger.info(f"At {self._time_since_boc(state)} since boc, the wild reactivity is {kwild.reactivity}.")
         return kwild
 
     @append_doc_of(Regime.get_controlled_state)
     def get_controlled_state(self, state: OperationalState) -> OperationalState:
         self.update_results_per_height(state)
         crit_height = critical_height(self.result_per_height)
-        fraction = (crit_height - min(self.heights)) / (
-            max(self.heights) - min(self.heights)
-        )
-        logger.info(
-            f"Critical height is {crit_height}, which is {fraction:.1%} of the control range"
-        )
+        fraction = (crit_height - min(self.heights)) / (max(self.heights) - min(self.heights))
+        logger.info(f"Critical height is {crit_height}, which is {fraction:.1%} of the control range")
         return state.new_control_height(self.control_alias, crit_height)
 
-    def update_results_per_height(
-        self, state: OperationalState, **oracle_kwargs
-    ) -> None:
+    def update_results_per_height(self, state: OperationalState, **oracle_kwargs) -> None:
         """
         return controlled state (state with control rods inside).
         used for correcting control height during burnup
         """
-        logger.info(
-            f"Updating reaction rates and reactivity in different heights for {state=}"
-        )
+        logger.info(f"Updating reaction rates and reactivity in different heights for {state=}")
         with self.oracle_context():
             _reaction_rates_calculator = curry(
                 reaction_rates_calculator,
@@ -165,9 +148,7 @@ class ControlledRegime(Regime):
                 burnup_queries_factory=self.batman.queries,
                 **oracle_kwargs,
             )
-            relevant_reaction_rates = compose(
-                data_is_relevant(tolerance=self.tolerance), _reaction_rates_calculator
-            )
+            relevant_reaction_rates = compose(data_is_relevant(tolerance=self.tolerance), _reaction_rates_calculator)
             (self.result_per_height,) = compute(
                 heightwise_characteristic(
                     state,
@@ -176,10 +157,7 @@ class ControlledRegime(Regime):
                     characteristic=relevant_reaction_rates,
                 )
             )
-        if all(
-            val is None for val in map(itemgetter(1), self.result_per_height.values())
-        ):
+        if all(val is None for val in map(itemgetter(1), self.result_per_height.values())):
             raise ValueError(
-                f"The reactivity of {state} was not within "
-                f"{self.tolerance} pcm of criticality at all heights."
+                f"The reactivity of {state} was not within {self.tolerance} pcm of criticality at all heights."
             )

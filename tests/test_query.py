@@ -1,16 +1,13 @@
 import hypothesis.strategies as st
+from corecompute.query import KQuery, ReactionScore, Score, VolumeQuery
 from hypothesis import given, settings
-from isotopes import U235, Pu239, Al27, H1, He4, B10, Xe135m
+from isotopes import B10, H1, U235, Al27, He4, Pu239, Xe135m
 from reactions import ProtoReaction, Typus
-
-from corecompute.query import KQuery, VolumeQuery, Score, ReactionScore
 
 kqueries = st.just(KQuery())
 fluxscore = st.just((Score("flux", volume_specific=True),))
 heatscore = st.just((Score("fission-q-prompt", volume_specific=True),))
-components = st.lists(
-    st.text(alphabet="abcdefghijklmnopqrstuvwxyz/", min_size=1), min_size=1, max_size=10
-).map(tuple)
+components = st.lists(st.text(alphabet="abcdefghijklmnopqrstuvwxyz/", min_size=1), min_size=1, max_size=10).map(tuple)
 energies = (
     st.one_of(
         st.lists(

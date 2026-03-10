@@ -6,7 +6,6 @@ from functools import partial
 from coreoperator import OperationalState
 from dask import delayed as unpure_delayed
 
-
 MWday = float
 delayed = partial(unpure_delayed, pure=True)
 PCM = float

@@ -2,22 +2,19 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import timedelta
 from random import Random
-from typing import Sequence, Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from batman import BurnResult
 from batman.units import PCM
-from coreoperator.history import History, OperationalPeriod, StateParams
-from scipy.constants import day
-
 from corecompute.oracle import OracleResult
 from corecompute.query import KQuery
 from corecompute.result import KResult
+from coreoperator.history import History, OperationalPeriod, StateParams
+from scipy.constants import day
 
 
 class FakeState:
-    def __init__(
-        self, control_worths: dict[str, float], aliases: dict[str, Sequence[str]]
-    ):
+    def __init__(self, control_worths: dict[str, float], aliases: dict[str, Sequence[str]]):
         self.control_worths = control_worths
         self.aliases = aliases
         self.heights = {alias: 0.0 for alias in control_worths.keys()}
@@ -25,9 +22,7 @@ class FakeState:
         self.drhodt = -100.0 / day
         self.rho_0_in = -3000.0
         self.out_h = 64.0
-        self.history = History(
-            [OperationalPeriod(StateParams(power=25.0, **aliases), time=timedelta(0))]
-        )
+        self.history = History([OperationalPeriod(StateParams(power=25.0, **aliases), time=timedelta(0))])
         self.params = StateParams(power=25.0)
 
     @property
@@ -36,9 +31,7 @@ class FakeState:
             yield height, self.control_worths[alias]
 
     @classmethod
-    def new_control_height(
-        cls, state: "FakeState", alias: str, height: float
-    ) -> "FakeState":
+    def new_control_height(cls, state: "FakeState", alias: str, height: float) -> "FakeState":
         new_state = deepcopy(state)
         params = new_state.params.copy(alias=height)
         new_state.history = new_state.history.timestep(params, timedelta(0))
@@ -91,9 +84,7 @@ class FakeOracleNoisy(FakeOracle):
         self._rand = Random(seed)
         self.limit = limit
 
-    def _random_but_limited(
-        self, mu: PCM, std: PCM, limit: Optional[float] = None
-    ) -> PCM:
+    def _random_but_limited(self, mu: PCM, std: PCM, limit: Optional[float] = None) -> PCM:
         limit = limit or self.limit
         noise = mu - 5 * limit * std
         while not (mu - limit * std <= noise <= mu + limit * std):
@@ -128,9 +119,7 @@ class FakeBatman:
         return FakeState.new_time(state, time), batinfo
 
     @staticmethod
-    def burn_pcm(
-        state: FakeState, maximal_timestep: timedelta, k: float, drho: PCM, **_
-    ):
+    def burn_pcm(state: FakeState, maximal_timestep: timedelta, k: float, drho: PCM, **_):
         trho = timedelta(seconds=-drho / state.drhodt)
         if trho < timedelta(0.0):
             raise ValueError("Cannot step backwards")
