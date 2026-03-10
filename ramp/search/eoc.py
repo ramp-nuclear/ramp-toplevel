@@ -92,7 +92,7 @@ def _next_state(
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
     if (
-        safe_reactivity
+        safe_reactivity is not None
         and state.history.cycle_time.total_seconds()
         != safe.history.cycle_time.total_seconds()
     ):
@@ -111,7 +111,6 @@ def _next_state(
         safe_reactivity = safe_reactivity if too_risky(kwild, rho) else kwild.reactivity
         maxstep = max_safe_step(
             op_max_timestep=regime.maximal_timestep,
-            wanted_timestep=guess,
             kres=kwild,
             drhodt=drhodt,
             rho_target=rho,
@@ -214,7 +213,6 @@ def risk_over(kres: KResult, rho: PCM, alpha: float) -> bool:
 def max_safe_step_at_risk(
     *,
     op_max_timestep: timedelta,
-    wanted_timestep: timedelta,
     kres: KResult,
     drhodt: PCMPerSecond,
     rho_target: PCM,
@@ -242,8 +240,6 @@ def max_safe_step_at_risk(
     Parameters
     ----------
     op_max_timestep - Maximal step we can take between transport operations.
-    wanted_timestep - The step we are guessing we should take to reach the goal.
-                      These two are used in the edge cases only.
     minimal_timestep - The minimal legal timestep. Around 1 day since Xe135 has
                        to approach equilibrium for drhodt to make sense in the
                        following step.
@@ -258,14 +254,10 @@ def max_safe_step_at_risk(
 
     """
 
-    if wanted_timestep < op_max_timestep:
-        return op_max_timestep
-
-    min_step = minimal_timestep.total_seconds()
     dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
     y = dist.inv_cdf(alpha)
-    tsec = ((rho_target - kres.reactivity - y) / drhodt) - min_step
-    return min(timedelta(seconds=tsec), op_max_timestep)
+    tseconds = ((rho_target - kres.reactivity - y) / drhodt)
+    return min(timedelta(seconds=tseconds) - minimal_timestep, op_max_timestep)
 
 
 find_eoc = partial(

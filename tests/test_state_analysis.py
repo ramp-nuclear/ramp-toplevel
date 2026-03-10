@@ -50,7 +50,7 @@ def test_get_rods_extraction_worth():
         reactivity = rod_worth * (
             num_of_aluminum_blocks - nominal_num_of_aluminum_blocks
         )
-        reactivity_error = 0.03 * abs(reactivity)
+        reactivity_error = 0.03 * abs(reactivity) + 1e-50
         return _to_oracle_result(reactivity, reactivity_error)
 
     sites = [key for key in example_state.core.grid.contents.keys()][:4]
@@ -183,7 +183,7 @@ def test_stepwise_shuffle_reactivity(factory):
             reactivity = 0.0
         else:
             reactivity = len(state.history.steps[-1].actions)
-        reactivity_error = 0.03 * reactivity
+        reactivity_error = 0.03 * reactivity + 1e-50
         return _to_oracle_result(reactivity, reactivity_error)
 
     (reactivities,) = dask.compute(
