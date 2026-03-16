@@ -30,7 +30,7 @@ def find_eoc_from_boc(
     regime: Regime,
     at_eoc: Callable[[KResult, PCM], bool],
     too_risky: Callable[[KResult, PCM], bool],
-    max_safe_step: Callable,
+    max_step: Callable,
 ) -> tuple[OperationalState, OperationalState]:
     """Algorithm to reach eoc, beginning with a BoC core.
 
@@ -61,7 +61,7 @@ def find_eoc_from_boc(
         regime=regime,
         at_eoc=at_eoc,
         too_risky=too_risky,
-        max_safe_step=max_safe_step,
+        max_step=max_step,
         drhodt=info.drhodt or -100.0,
     )
 
@@ -83,25 +83,30 @@ def _next_state(
     rho: PCM,
     drhodt: PCMPerSecond,
     too_risky: Callable[[KResult, PCM], bool],
-    max_safe_step: Callable,
+    max_step: Callable,
     kwild: Optional[KResult] = None,
     safe_reactivity: Optional[PCM] = None,
 ) -> tuple[OperationalState, OperationalState, PCMPerSecond]:
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
+    unreliable_drhodt = False
     if (
         safe_reactivity is not None
         and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
     ):
-        drhodt = (kwild.reactivity - safe_reactivity) / (
+        new_drhodt = (kwild.reactivity - safe_reactivity) / (
             state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds()
         )
+        if new_drhodt < 0:
+            drhodt = new_drhodt
+        else:
+            unreliable_drhodt = True
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
     logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
     if forward:
-        safe = safe if too_risky(kwild, rho) else state
-        safe_reactivity = safe_reactivity if too_risky(kwild, rho) else kwild.reactivity
-        maxstep = max_safe_step(
+        safe = safe if (too_risky(kwild, rho) or unreliable_drhodt) else state
+        safe_reactivity = safe_reactivity if (too_risky(kwild, rho) or unreliable_drhodt) else kwild.reactivity
+        maxstep = max_step(
             op_max_timestep=regime.maximal_timestep,
             kres=kwild,
             drhodt=drhodt,
@@ -139,7 +144,7 @@ def _find_eoc(
     regime: Regime,
     at_eoc: Callable[[KResult, PCM], bool],
     too_risky: Callable[[KResult, PCM], bool],
-    max_safe_step: Callable,
+    max_step: Callable,
 ) -> OperationalState:
     safe_state = state
     safe_reactivity = None
@@ -148,7 +153,7 @@ def _find_eoc(
         rho=rho,
         too_risky=too_risky,
         regime=regime,
-        max_safe_step=max_safe_step,
+        max_step=max_step,
     )
     kwild = regime.get_kwild(state)
     while not at_eoc(kwild, rho):
@@ -240,17 +245,45 @@ def max_safe_step_at_risk(
     -------
     The timestep we can confidently take without violating the rules of conduct.
 
-    """
-
+    """  
     dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
     y = dist.inv_cdf(alpha)
-    tseconds = (rho_target - kres.reactivity - y) / drhodt
-    return min(timedelta(seconds=tseconds) - minimal_timestep, op_max_timestep)
+    tseconds = timedelta(seconds=((rho_target - y) - kres.reactivity) / drhodt)
+    if tseconds > op_max_timestep and tseconds - minimal_timestep < op_max_timestep:
+        tseconds = tseconds - minimal_timestep
+    return min(tseconds, op_max_timestep)
+
+
+def max_step_deterministic(
+    *,
+    op_max_timestep: timedelta,
+    kres: KResult,
+    drhodt: PCMPerSecond,
+    rho_target: PCM,
+    minimal_timestep: timedelta = timedelta(days=1.0),
+) -> timedelta:
+    """Calculate the step as the minimum between the time to reach the
+    target reactivity and the operational maximum timestep.
+
+    Parameters
+    ----------
+    op_max_timestep - Maximal step we can take between transport operations.
+    kres - The KResult for a current point, used to extrapolate forward.
+    drhodt - The burnup worth of the core. Used for extrapolation.
+    rho_target - The desired target reactivity value.
+    minimal_timestep - Minimum allowed timestep.
+
+    """
+    tseconds = timedelta(seconds=(rho_target - kres.reactivity) / drhodt)
+    if tseconds > op_max_timestep and tseconds - minimal_timestep < op_max_timestep:
+        tseconds = tseconds - minimal_timestep
+    return min(tseconds, op_max_timestep)
+
 
 
 find_eoc = partial(
     find_eoc_from_boc,
     at_eoc=partial(at_eoc_one_sigma, drho=100.0),
     too_risky=partial(risk_over, alpha=1e-8),
-    max_safe_step=max_safe_step_at_risk,
+    max_step=max_step_deterministic,
 )
