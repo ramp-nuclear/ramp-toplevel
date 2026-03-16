@@ -62,7 +62,6 @@ def test_reach_eoc_with_fake_exact(boc: FakeState):
     assert abs(kwild.reactivity) < 100.0 + kwild.reactivity_error
 
 
-# @pytest.mark.xfail(reason="We are encountering bad states here. Need to rework the eoc algorithm")
 @_shut_ramp_up
 @settings(max_examples=500)
 @given(seed=st.integers(), fake_state=fake_states)

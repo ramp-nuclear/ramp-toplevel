@@ -52,7 +52,7 @@ def eoc_from_boc(state: OperationalState, regime: Regime) -> OperationalState:
     at_eoc = partial(at_eoc_one_sigma, drho=100.0)
     risky = partial(risk_over, alpha=1e-8)
     safe_step = partial(max_safe_step_at_risk, alpha=1e-8)
-    find_eoc = partial(find_eoc_from_boc, at_eoc=at_eoc, too_risky=risky, max_safe_step=safe_step)
+    find_eoc = partial(find_eoc_from_boc, at_eoc=at_eoc, too_risky=risky, max_step=safe_step)
     return find_eoc(state, regime=regime, rho=0.0)
 
 

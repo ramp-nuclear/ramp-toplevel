@@ -128,7 +128,7 @@ class Regime:
         oracle_kwargs - keyword arguments that are passed down to the oracle
 
         """
-        if guess and guess <= timedelta(0):
+        if guess is not None and guess <= timedelta(0):
             raise ValueError(f"{guess=} must be positive")
         maxstep = maxstep or self.maximal_timestep
         kwild = self.get_kwild(state)

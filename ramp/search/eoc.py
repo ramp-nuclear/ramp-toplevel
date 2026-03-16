@@ -86,7 +86,7 @@ def _next_state(
     max_step: Callable,
     kwild: Optional[KResult] = None,
     safe_reactivity: Optional[PCM] = None,
-) -> tuple[OperationalState, OperationalState, PCMPerSecond]:
+) -> tuple[OperationalState, OperationalState, PCMPerSecond, Optional[PCM]]:
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
     unreliable_drhodt = False
@@ -130,7 +130,7 @@ def _next_state(
                 f"estimated {drhodt=}, with {kwild.reactivity=} and "
                 f"{safe_reactivity=}."
                 f"\n{guess=}, which should be negative"
-                f"\n{state.history.cycle_time=} and {safe.history.cycle.time=}"
+                f"\n{state.history.cycle_time=} and {safe.history.cycle_time=}"
             )
         state, info = regime.burnstep(safe, step)
     return state, safe, info.drhodt, safe_reactivity
@@ -221,14 +221,17 @@ def max_safe_step_at_risk(
     However, we do not know r0, so we define instead:
                        z(t) = rho(0) + t*dr/dt + N(0, sigma)
     which is a random variable of the type N(r0 + t*dr/dt, sigma*sqrt(2)).
-    We want t such that:    P(z(t+min_step) < target) = alpha.
+    We want t such that:    P(z(t) < target) = alpha.
     The previous line is equivalent to:
-                P(x < target - rho(0) - (t+min_step)*dr/dt) = alpha
+                P(x < target - rho(0) - t*dr/dt) = alpha
     given that x ~ N(0, sigma*sqrt(2)).
     Using inv_cdf we get:
                 P(x < y) = alpha => y = inv_cdf(alpha)
-            =>  target - rho(0) - (t+min_step)*dr/dt = y = inv_cdf(alpha).
-            =>  t = ((target - rho(0) - y) / (dr/dt)) - min_step
+            =>  target - rho(0) - t*dr/dt = y = inv_cdf(alpha).
+            =>  t = ((target - y) - rho(0)) / (dr/dt)
+    If t exceeds op_max_timestep but subtracting minimal_timestep brings it
+    under, we do so — this ensures the following step is at least
+    minimal_timestep long (needed for Xe135 equilibrium / drhodt stability).
 
     Parameters
     ----------
