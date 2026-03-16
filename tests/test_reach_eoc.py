@@ -44,7 +44,7 @@ fake_states = st.builds(fake_state_factory)
 
 
 @_shut_ramp_up
-@settings(max_examples=500, deadline=1000)
+@settings(max_examples=500)
 @given(boc=fake_states)
 def test_reach_eoc_with_fake_exact(boc: FakeState):
     oracle = FakeOracle(error=75.0)
@@ -64,7 +64,7 @@ def test_reach_eoc_with_fake_exact(boc: FakeState):
 
 # @pytest.mark.xfail(reason="We are encountering bad states here. Need to rework the eoc algorithm")
 @_shut_ramp_up
-@settings(max_examples=500, deadline=None)
+@settings(max_examples=500)
 @given(seed=st.integers(), fake_state=fake_states)
 def test_reach_eoc_with_fake_noisy(fake_state: FakeState, seed: int):
     oracle = FakeOracleNoisy(error=25.0, seed=seed, limit=1.5)
