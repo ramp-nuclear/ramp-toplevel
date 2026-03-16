@@ -3,7 +3,7 @@
 import logging
 from datetime import timedelta
 from functools import partial
-from typing import Callable, Optional
+from typing import Callable, NamedTuple, Optional
 
 import numpy as np
 from batman import BurnResult
@@ -21,6 +21,131 @@ class OperationalError(Exception):
     """An error for when the required operational scheme doesn't make sense."""
 
 
+class _SearchState(NamedTuple):
+    """Tracks iteration state across EOC search steps."""
+
+    state: OperationalState
+    safe: OperationalState
+    drhodt: PCMPerSecond
+    safe_reactivity: Optional[PCM]
+
+
+class EocSearch:
+    """Iterative search for the end-of-cycle state."""
+
+    def __init__(
+        self,
+        *,
+        at_eoc: Callable[[KResult, PCM], bool],
+        too_risky: Callable[[KResult, PCM], bool],
+        max_step: Callable,
+    ):
+        self.at_eoc = at_eoc
+        self.too_risky = too_risky
+        self.max_step = max_step
+
+    def __call__(
+        self,
+        state: OperationalState,
+        *,
+        rho: PCM,
+        regime: Regime,
+    ) -> tuple[OperationalState, OperationalState]:
+        """Find EOC starting from a BoC state.
+
+        Parameters
+        ----------
+        state - State at BoC.
+        rho - Reactivity to reach at EoC.
+        regime - Operational regime to use during this cycle.
+
+        Returns
+        -------
+        The Bo3 and the EoC state.
+
+        """
+        # Initial burn steps
+        info = BurnResult.empty()
+        for step in regime.initial_steps:
+            state, ninfo = regime.burnstep(state, step)
+            info = info + ninfo
+        kwild = regime.get_kwild(state)
+
+        if kwild.reactivity < rho and not self.at_eoc(kwild, rho):
+            raise OperationalError(
+                "Could not burn the core for the required steps "
+                "and without going under the desired reactivity:"
+                f" {kwild.reactivity} < {rho}"
+            )
+
+        bo3 = state
+        search = _SearchState(state, state, info.drhodt or -100.0, None)
+
+        kwild = regime.get_kwild(search.state)
+        while not self.at_eoc(kwild, rho):
+            search = self._step(search, kwild=kwild, rho=rho, regime=regime)
+            kwild = regime.get_kwild(search.state)
+
+        return bo3, search.state
+
+    def _step(
+        self,
+        s: _SearchState,
+        *,
+        kwild: KResult,
+        rho: PCM,
+        regime: Regime,
+    ) -> _SearchState:
+        """Advance one step toward EOC."""
+        state, safe, drhodt, safe_reactivity = s
+        forward = kwild.reactivity > rho
+        unreliable_drhodt = False
+        if (
+            safe_reactivity is not None
+            and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
+        ):
+            new_drhodt = (kwild.reactivity - safe_reactivity) / (
+                state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds()
+            )
+            if new_drhodt < 0:
+                drhodt = new_drhodt
+            else:
+                unreliable_drhodt = True
+        guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
+        logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
+        if forward:
+            safe = safe if (self.too_risky(kwild, rho) or unreliable_drhodt) else state
+            safe_reactivity = safe_reactivity if (self.too_risky(kwild, rho) or unreliable_drhodt) else kwild.reactivity
+            maxstep = self.max_step(
+                op_max_timestep=regime.maximal_timestep,
+                kres=kwild,
+                drhodt=drhodt,
+                rho_target=rho,
+            )
+            state, info = regime.burn_to_pcm(state, rho=rho, guess=guess, maxstep=maxstep)
+            logger.info(
+                f"Burned for {info.time}, \n"
+                "Burnup-estimated reactivity at the burned state is "
+                f"{info.rho:.0f} PCM\n"
+                f"Estimated drho/dt={info.drhodt * day:.0f} PCM/DAY"
+            )
+        else:
+            step = state.history.cycle_time + guess - safe.history.cycle_time
+            if step > regime.maximal_timestep:
+                step = step / 2
+            logger.info(f"Doing a step from the safe time {safe.history.cycle_time} to {safe.history.cycle_time + step}")
+            if step < timedelta(0):
+                raise ValueError(
+                    f"Computed a negative {step=} for a desired {rho=} and an "
+                    f"estimated {drhodt=}, with {kwild.reactivity=} and "
+                    f"{safe_reactivity=}."
+                    f"\n{guess=}, which should be negative"
+                    f"\n{state.history.cycle_time=} and {safe.history.cycle_time=}"
+                )
+            state, info = regime.burnstep(safe, step)
+        return _SearchState(state, safe, info.drhodt, safe_reactivity)
+
+
 def find_eoc_from_boc(
     state: OperationalState,
     *,
@@ -30,139 +155,10 @@ def find_eoc_from_boc(
     too_risky: Callable[[KResult, PCM], bool],
     max_step: Callable,
 ) -> tuple[OperationalState, OperationalState]:
-    """Algorithm to reach eoc, beginning with a BoC core.
-
-    Parameters
-    ----------
-    state - State at BoC.
-    rho - Reactivity to reach at EoC.
-    regime - Operational regime to use during this cycle.
-    at_eoc - Function to check if we're at EoC.
-    too_risky - Function to check if a state is too risky to be used as
-                fallback.
-
-    Returns
-    -------
-    The Bo3 and the EoC state.
-
-    """
-    state, kwild, info = _do_first_steps(regime, state)
-    if kwild.reactivity < rho and not at_eoc(kwild, rho):
-        raise OperationalError(
-            "Could not burn the core for the required steps "
-            "and without going under the desired reactivity:"
-            f" {kwild.reactivity} < {rho}"
-        )
-    return state, _find_eoc(
-        state=state,
-        rho=rho,
-        regime=regime,
-        at_eoc=at_eoc,
-        too_risky=too_risky,
-        max_step=max_step,
-        drhodt=info.drhodt or -100.0,
+    """Backward-compatible wrapper around EocSearch."""
+    return EocSearch(at_eoc=at_eoc, too_risky=too_risky, max_step=max_step)(
+        state, rho=rho, regime=regime,
     )
-
-
-def _do_first_steps(regime: Regime, state: OperationalState) -> tuple[OperationalState, KResult, BurnResult]:
-    info = BurnResult.empty()
-    for step in regime.initial_steps:
-        state, ninfo = regime.burnstep(state, step)
-        info = info + ninfo
-    kwild = regime.get_kwild(state)
-    return state, kwild, info
-
-
-def _next_state(
-    state: OperationalState,
-    *,
-    safe: OperationalState,
-    regime: Regime,
-    rho: PCM,
-    drhodt: PCMPerSecond,
-    too_risky: Callable[[KResult, PCM], bool],
-    max_step: Callable,
-    kwild: Optional[KResult] = None,
-    safe_reactivity: Optional[PCM] = None,
-) -> tuple[OperationalState, OperationalState, PCMPerSecond, Optional[PCM]]:
-    kwild = kwild or regime.get_kwild(state)
-    forward = kwild.reactivity > rho
-    unreliable_new_drhodt = False
-    if (
-        safe_reactivity is not None
-        and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
-    ):
-        new_drhodt = (kwild.reactivity - safe_reactivity) / (
-            state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds()
-        )
-        unreliable_new_drhodt = new_drhodt >= 0
-        drhodt = drhodt if unreliable_new_drhodt else new_drhodt
-    guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
-    logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
-    if forward:
-        skip_update = too_risky(kwild, rho) or unreliable_new_drhodt
-        safe = safe if skip_update else state
-        safe_reactivity = safe_reactivity if skip_update else kwild.reactivity
-        maxstep = max_step(
-            op_max_timestep=regime.maximal_timestep,
-            kres=kwild,
-            drhodt=drhodt,
-            rho_target=rho,
-        )
-        state, info = regime.burn_to_pcm(state, rho=rho, guess=guess, maxstep=maxstep)
-        logger.info(
-            f"Burned for {info.time}, \n"
-            "Burnup-estimated reactivity at the burned state is "
-            f"{info.rho:.0f} PCM\n"
-            f"Estimated drho/dt={info.drhodt * day:.0f} PCM/DAY"
-        )
-    else:
-        step = state.history.cycle_time + guess - safe.history.cycle_time
-        if step > regime.maximal_timestep:
-            step = step / 2
-        logger.info(f"Doing a step from the safe time {safe.history.cycle_time} to {safe.history.cycle_time + step}")
-        if step < timedelta(0):
-            raise ValueError(
-                f"Computed a negative {step=} for a desired {rho=} and an "
-                f"estimated {drhodt=}, with {kwild.reactivity=} and "
-                f"{safe_reactivity=}."
-                f"\n{guess=}, which should be negative"
-                f"\n{state.history.cycle_time=} and {safe.history.cycle_time=}"
-            )
-        state, info = regime.burnstep(safe, step)
-    return state, safe, info.drhodt, safe_reactivity
-
-
-def _find_eoc(
-    state: OperationalState,
-    *,
-    rho: PCM,
-    drhodt: PCMPerSecond,
-    regime: Regime,
-    at_eoc: Callable[[KResult, PCM], bool],
-    too_risky: Callable[[KResult, PCM], bool],
-    max_step: Callable,
-) -> OperationalState:
-    safe_state = state
-    safe_reactivity = None
-    _new_state = partial(
-        _next_state,
-        rho=rho,
-        too_risky=too_risky,
-        regime=regime,
-        max_step=max_step,
-    )
-    kwild = regime.get_kwild(state)
-    while not at_eoc(kwild, rho):
-        state, safe_state, drhodt, safe_reactivity = _new_state(
-            state,
-            kwild=kwild,
-            safe=safe_state,
-            drhodt=drhodt,
-            safe_reactivity=safe_reactivity,
-        )
-        kwild = regime.get_kwild(state)
-    return state
 
 
 def at_eoc_one_sigma(kres: KResult, rho: PCM, drho: PCM) -> bool:
@@ -226,8 +222,7 @@ def max_step_deterministic(
     return min(tstep, op_max_timestep)
 
 
-find_eoc = partial(
-    find_eoc_from_boc,
+find_eoc = EocSearch(
     at_eoc=partial(at_eoc_one_sigma, drho=100.0),
     too_risky=partial(risk_over, alpha=1e-8),
     max_step=max_step_deterministic,

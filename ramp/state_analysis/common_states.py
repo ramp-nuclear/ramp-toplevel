@@ -23,8 +23,8 @@ from scipy.constants import day
 from ramp.regime import Regime
 from ramp.regime.controlled_regime import heightwise_characteristic
 from ramp.search.eoc import (
+    EocSearch,
     at_eoc_one_sigma,
-    find_eoc_from_boc,
     max_step_deterministic,
     risk_over,
 )
@@ -48,11 +48,13 @@ def cold_unpoisoned(
     return unpoisoned(cold, unpoison)
 
 
-def eoc_from_boc(state: OperationalState, regime: Regime) -> OperationalState:
-    at_eoc = partial(at_eoc_one_sigma, drho=100.0)
-    risky = partial(risk_over, alpha=1e-8)
-    find_eoc = partial(find_eoc_from_boc, at_eoc=at_eoc, too_risky=risky, max_step=max_step_deterministic)
-    return find_eoc(state, regime=regime, rho=0.0)
+def eoc_from_boc(state: OperationalState, regime: Regime) -> tuple[OperationalState, OperationalState]:
+    search = EocSearch(
+        at_eoc=partial(at_eoc_one_sigma, drho=100.0),
+        too_risky=partial(risk_over, alpha=1e-8),
+        max_step=max_step_deterministic,
+    )
+    return search(state, regime=regime, rho=0.0)
 
 
 def _divide_period(period: float, resolution: float) -> Iterable[timedelta]:
