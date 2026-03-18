@@ -89,7 +89,6 @@ def _next_state(
 ) -> tuple[OperationalState, OperationalState, PCMPerSecond, Optional[PCM]]:
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
-    unreliable_drhodt = False
     if (
         safe_reactivity is not None
         and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
