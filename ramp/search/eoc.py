@@ -97,10 +97,8 @@ def _next_state(
         new_drhodt = (kwild.reactivity - safe_reactivity) / (
             state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds()
         )
-        if new_drhodt < 0:
-            drhodt = new_drhodt
-        else:
-            unreliable_drhodt = True
+        unreliable_new_drhodt = new_drhodt >= 0
+        drhodt = drhodt if unreliable_new_drhodt else new_drhodt
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
     logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
     if forward:
