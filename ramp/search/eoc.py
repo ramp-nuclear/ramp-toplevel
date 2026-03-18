@@ -102,8 +102,8 @@ def _next_state(
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
     logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
     if forward:
-        safe = safe if (too_risky(kwild, rho) or unreliable_drhodt) else state
-        safe_reactivity = safe_reactivity if (too_risky(kwild, rho) or unreliable_drhodt) else kwild.reactivity
+        safe = safe if (too_risky(kwild, rho) or unreliable_new_drhodt) else state
+        safe_reactivity = safe_reactivity if (too_risky(kwild, rho) or unreliable_new_drhodt) else kwild.reactivity
         maxstep = max_step(
             op_max_timestep=regime.maximal_timestep,
             kres=kwild,
