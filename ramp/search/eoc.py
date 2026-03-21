@@ -89,6 +89,7 @@ def _next_state(
 ) -> tuple[OperationalState, OperationalState, PCMPerSecond, Optional[PCM]]:
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
+    unreliable_new_drhodt = False
     if (
         safe_reactivity is not None
         and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
@@ -245,7 +246,7 @@ def max_safe_step_at_risk(
     -------
     The timestep we can confidently take without violating the rules of conduct.
 
-    """  
+    """
     dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
     y = dist.inv_cdf(alpha)
     tseconds = timedelta(seconds=((rho_target - y) - kres.reactivity) / drhodt)
@@ -278,7 +279,6 @@ def max_step_deterministic(
     if tseconds > op_max_timestep and tseconds - minimal_timestep < op_max_timestep:
         tseconds = tseconds - minimal_timestep
     return min(tseconds, op_max_timestep)
-
 
 
 find_eoc = partial(
