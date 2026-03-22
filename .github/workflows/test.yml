@@ -47,4 +47,4 @@ jobs:
     - name: Test in test directory
       run: |
         cd tests
-        pytest -v
+        pytest -v --hypothesis-profile=thorough

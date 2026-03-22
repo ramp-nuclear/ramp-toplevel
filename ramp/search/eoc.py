@@ -3,8 +3,6 @@
 import logging
 from datetime import timedelta
 from functools import partial
-from math import sqrt
-from statistics import NormalDist
 from typing import Callable, Optional
 
 import numpy as np
@@ -30,7 +28,7 @@ def find_eoc_from_boc(
     regime: Regime,
     at_eoc: Callable[[KResult, PCM], bool],
     too_risky: Callable[[KResult, PCM], bool],
-    max_safe_step: Callable,
+    max_step: Callable,
 ) -> tuple[OperationalState, OperationalState]:
     """Algorithm to reach eoc, beginning with a BoC core.
 
@@ -61,7 +59,7 @@ def find_eoc_from_boc(
         regime=regime,
         at_eoc=at_eoc,
         too_risky=too_risky,
-        max_safe_step=max_safe_step,
+        max_step=max_step,
         drhodt=info.drhodt or -100.0,
     )
 
@@ -83,25 +81,29 @@ def _next_state(
     rho: PCM,
     drhodt: PCMPerSecond,
     too_risky: Callable[[KResult, PCM], bool],
-    max_safe_step: Callable,
+    max_step: Callable,
     kwild: Optional[KResult] = None,
     safe_reactivity: Optional[PCM] = None,
-) -> tuple[OperationalState, OperationalState, PCMPerSecond]:
+) -> tuple[OperationalState, OperationalState, PCMPerSecond, Optional[PCM]]:
     kwild = kwild or regime.get_kwild(state)
     forward = kwild.reactivity > rho
+    unreliable_new_drhodt = False
     if (
         safe_reactivity is not None
         and state.history.cycle_time.total_seconds() != safe.history.cycle_time.total_seconds()
     ):
-        drhodt = (kwild.reactivity - safe_reactivity) / (
+        new_drhodt = (kwild.reactivity - safe_reactivity) / (
             state.history.cycle_time.total_seconds() - safe.history.cycle_time.total_seconds()
         )
+        unreliable_new_drhodt = new_drhodt >= 0
+        drhodt = drhodt if unreliable_new_drhodt else new_drhodt
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
     logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
     if forward:
-        safe = safe if too_risky(kwild, rho) else state
-        safe_reactivity = safe_reactivity if too_risky(kwild, rho) else kwild.reactivity
-        maxstep = max_safe_step(
+        skip_update = too_risky(kwild, rho) or unreliable_new_drhodt
+        safe = safe if skip_update else state
+        safe_reactivity = safe_reactivity if skip_update else kwild.reactivity
+        maxstep = max_step(
             op_max_timestep=regime.maximal_timestep,
             kres=kwild,
             drhodt=drhodt,
@@ -125,7 +127,7 @@ def _next_state(
                 f"estimated {drhodt=}, with {kwild.reactivity=} and "
                 f"{safe_reactivity=}."
                 f"\n{guess=}, which should be negative"
-                f"\n{state.history.cycle_time=} and {safe.history.cycle.time=}"
+                f"\n{state.history.cycle_time=} and {safe.history.cycle_time=}"
             )
         state, info = regime.burnstep(safe, step)
     return state, safe, info.drhodt, safe_reactivity
@@ -139,7 +141,7 @@ def _find_eoc(
     regime: Regime,
     at_eoc: Callable[[KResult, PCM], bool],
     too_risky: Callable[[KResult, PCM], bool],
-    max_safe_step: Callable,
+    max_step: Callable,
 ) -> OperationalState:
     safe_state = state
     safe_reactivity = None
@@ -148,7 +150,7 @@ def _find_eoc(
         rho=rho,
         too_risky=too_risky,
         regime=regime,
-        max_safe_step=max_safe_step,
+        max_step=max_step,
     )
     kwild = regime.get_kwild(state)
     while not at_eoc(kwild, rho):
@@ -198,59 +200,35 @@ def risk_over(kres: KResult, rho: PCM, alpha: float) -> bool:
     return risk >= alpha
 
 
-def max_safe_step_at_risk(
+def max_step_deterministic(
     *,
     op_max_timestep: timedelta,
     kres: KResult,
     drhodt: PCMPerSecond,
     rho_target: PCM,
-    alpha: float = 1e-8,
     minimal_timestep: timedelta = timedelta(days=1.0),
 ) -> timedelta:
-    """Calculate what is the largest step one can take while likely being able
-    to never need to go back, and that all future steps will be long enough
-    to not be a problem themselves.
-
-    Assume that at time t=0 we have rho(0) = r0 + N(0, sigma) = N(r0, sigma)
-    At time t=t we would have   rho(t) = r0 + t*dr/dt + N(0, sigma)
-    However, we do not know r0, so we define instead:
-                       z(t) = rho(0) + t*dr/dt + N(0, sigma)
-    which is a random variable of the type N(r0 + t*dr/dt, sigma*sqrt(2)).
-    We want t such that:    P(z(t+min_step) < target) = alpha.
-    The previous line is equivalent to:
-                P(x < target - rho(0) - (t+min_step)*dr/dt) = alpha
-    given that x ~ N(0, sigma*sqrt(2)).
-    Using inv_cdf we get:
-                P(x < y) = alpha => y = inv_cdf(alpha)
-            =>  target - rho(0) - (t+min_step)*dr/dt = y = inv_cdf(alpha).
-            =>  t = ((target - rho(0) - y) / (dr/dt)) - min_step
+    """Calculate the step as the minimum between the time to reach the
+    target reactivity and the operational maximum timestep.
 
     Parameters
     ----------
     op_max_timestep - Maximal step we can take between transport operations.
-    minimal_timestep - The minimal legal timestep. Around 1 day since Xe135 has
-                       to approach equilibrium for drhodt to make sense in the
-                       following step.
     kres - The KResult for a current point, used to extrapolate forward.
     drhodt - The burnup worth of the core. Used for extrapolation.
     rho_target - The desired target reactivity value.
-    alpha - Probability of falsely saying the step is safe.
-
-    Returns
-    -------
-    The timestep we can confidently take without violating the rules of conduct.
+    minimal_timestep - Minimum allowed timestep.
 
     """
-
-    dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
-    y = dist.inv_cdf(alpha)
-    tseconds = (rho_target - kres.reactivity - y) / drhodt
-    return min(timedelta(seconds=tseconds) - minimal_timestep, op_max_timestep)
+    tstep = timedelta(seconds=(rho_target - kres.reactivity) / drhodt)
+    if tstep > op_max_timestep and tstep - minimal_timestep < op_max_timestep:
+        tstep = tstep - minimal_timestep
+    return min(tstep, op_max_timestep)
 
 
 find_eoc = partial(
     find_eoc_from_boc,
     at_eoc=partial(at_eoc_one_sigma, drho=100.0),
     too_risky=partial(risk_over, alpha=1e-8),
-    max_safe_step=max_safe_step_at_risk,
+    max_step=max_step_deterministic,
 )
