@@ -102,8 +102,9 @@ def _next_state(
     guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
     logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
     if forward:
-        safe = safe if (too_risky(kwild, rho) or unreliable_new_drhodt) else state
-        safe_reactivity = safe_reactivity if (too_risky(kwild, rho) or unreliable_new_drhodt) else kwild.reactivity
+        skip_update = too_risky(kwild, rho) or unreliable_new_drhodt
+        safe = safe if skip_update else state
+        safe_reactivity = safe_reactivity if skip_update else kwild.reactivity
         maxstep = max_step(
             op_max_timestep=regime.maximal_timestep,
             kres=kwild,
@@ -249,10 +250,10 @@ def max_safe_step_at_risk(
     """
     dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
     y = dist.inv_cdf(alpha)
-    tseconds = timedelta(seconds=((rho_target - y) - kres.reactivity) / drhodt)
-    if tseconds > op_max_timestep and tseconds - minimal_timestep < op_max_timestep:
-        tseconds = tseconds - minimal_timestep
-    return min(tseconds, op_max_timestep)
+    tstep = timedelta(seconds=((rho_target - y) - kres.reactivity) / drhodt)
+    if tstep > op_max_timestep and tstep - minimal_timestep < op_max_timestep:
+        tstep = tstep - minimal_timestep
+    return min(tstep, op_max_timestep)
 
 
 def max_step_deterministic(
@@ -275,10 +276,10 @@ def max_step_deterministic(
     minimal_timestep - Minimum allowed timestep.
 
     """
-    tseconds = timedelta(seconds=(rho_target - kres.reactivity) / drhodt)
-    if tseconds > op_max_timestep and tseconds - minimal_timestep < op_max_timestep:
-        tseconds = tseconds - minimal_timestep
-    return min(tseconds, op_max_timestep)
+    tstep = timedelta(seconds=(rho_target - kres.reactivity) / drhodt)
+    if tstep > op_max_timestep and tstep - minimal_timestep < op_max_timestep:
+        tstep = tstep - minimal_timestep
+    return min(tstep, op_max_timestep)
 
 
 find_eoc = partial(
