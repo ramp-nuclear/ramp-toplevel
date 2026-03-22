@@ -25,7 +25,6 @@ from ramp.regime.controlled_regime import heightwise_characteristic
 from ramp.search.eoc import (
     at_eoc_one_sigma,
     find_eoc_from_boc,
-    max_safe_step_at_risk,
     max_step_deterministic,
     risk_over,
 )
