@@ -32,7 +32,6 @@ reactionqueries = st.builds(VolumeQuery, components, scores=scores)
 queries = st.one_of(kqueries, fissenerqueries, fluxqueries, reactionqueries)
 
 
-@settings(max_examples=500)
 @given(queries)
 def test_query_types_are_hashable(q):
     assert isinstance(hash(q), int)

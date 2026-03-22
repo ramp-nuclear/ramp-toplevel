@@ -202,60 +202,6 @@ def risk_over(kres: KResult, rho: PCM, alpha: float) -> bool:
     return risk >= alpha
 
 
-def max_safe_step_at_risk(
-    *,
-    op_max_timestep: timedelta,
-    kres: KResult,
-    drhodt: PCMPerSecond,
-    rho_target: PCM,
-    alpha: float = 1e-8,
-    minimal_timestep: timedelta = timedelta(days=1.0),
-) -> timedelta:
-    """Calculate what is the largest step one can take while likely being able
-    to never need to go back, and that all future steps will be long enough
-    to not be a problem themselves.
-
-    Assume that at time t=0 we have rho(0) = r0 + N(0, sigma) = N(r0, sigma)
-    At time t=t we would have   rho(t) = r0 + t*dr/dt + N(0, sigma)
-    However, we do not know r0, so we define instead:
-                       z(t) = rho(0) + t*dr/dt + N(0, sigma)
-    which is a random variable of the type N(r0 + t*dr/dt, sigma*sqrt(2)).
-    We want t such that:    P(z(t) < target) = alpha.
-    The previous line is equivalent to:
-                P(x < target - rho(0) - t*dr/dt) = alpha
-    given that x ~ N(0, sigma*sqrt(2)).
-    Using inv_cdf we get:
-                P(x < y) = alpha => y = inv_cdf(alpha)
-            =>  target - rho(0) - t*dr/dt = y = inv_cdf(alpha).
-            =>  t = ((target - y) - rho(0)) / (dr/dt)
-    If t exceeds op_max_timestep but subtracting minimal_timestep brings it
-    under, we do so — this ensures the following step is at least
-    minimal_timestep long (needed for Xe135 equilibrium / drhodt stability).
-
-    Parameters
-    ----------
-    op_max_timestep - Maximal step we can take between transport operations.
-    minimal_timestep - The minimal legal timestep. Around 1 day since Xe135 has
-                       to approach equilibrium for drhodt to make sense in the
-                       following step.
-    kres - The KResult for a current point, used to extrapolate forward.
-    drhodt - The burnup worth of the core. Used for extrapolation.
-    rho_target - The desired target reactivity value.
-    alpha - Probability of falsely saying the step is safe.
-
-    Returns
-    -------
-    The timestep we can confidently take without violating the rules of conduct.
-
-    """
-    dist = NormalDist(0, kres.reactivity_error * sqrt(2.0))
-    y = dist.inv_cdf(alpha)
-    tstep = timedelta(seconds=((rho_target - y) - kres.reactivity) / drhodt)
-    if tstep > op_max_timestep and tstep - minimal_timestep < op_max_timestep:
-        tstep = tstep - minimal_timestep
-    return min(tstep, op_max_timestep)
-
-
 def max_step_deterministic(
     *,
     op_max_timestep: timedelta,
