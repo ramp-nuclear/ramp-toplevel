@@ -6,7 +6,7 @@ from functools import wraps
 
 import hypothesis.strategies as st
 import pytest
-from hypothesis import given, settings
+from hypothesis import given
 
 from ramp.regime.regime import Regime
 from ramp.search.eoc import find_eoc

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import hypothesis.strategies as st
 from corecompute.result import KResult
-from hypothesis import given, settings
+from hypothesis import given
 from scipy.constants import day
 
 from ramp.search.eoc import max_step_deterministic as max_det

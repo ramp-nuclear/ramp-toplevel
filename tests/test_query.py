@@ -1,6 +1,6 @@
 import hypothesis.strategies as st
 from corecompute.query import KQuery, ReactionScore, Score, VolumeQuery
-from hypothesis import given, settings
+from hypothesis import given
 from isotopes import B10, H1, U235, Al27, He4, Pu239, Xe135m
 from reactions import ProtoReaction, Typus
 

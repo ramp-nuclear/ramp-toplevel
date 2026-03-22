@@ -3,8 +3,6 @@
 import logging
 from datetime import timedelta
 from functools import partial
-from math import sqrt
-from statistics import NormalDist
 from typing import Callable, Optional
 
 import numpy as np
