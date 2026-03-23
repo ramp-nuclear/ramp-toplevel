@@ -111,7 +111,9 @@ class EocSearch:
             else:
                 unreliable_drhodt = True
         guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
-        logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
+        logger.info(
+            f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} "
+        )
         if forward:
             skip_update = unreliable_drhodt or self.too_risky(kwild, rho)
             safe = safe if skip_update else state
@@ -133,7 +135,9 @@ class EocSearch:
             step = state.history.cycle_time + guess - safe.history.cycle_time
             if step > regime.maximal_timestep:
                 step = step / 2
-            logger.info(f"Doing a step from the safe time {safe.history.cycle_time} to {safe.history.cycle_time + step}")
+            logger.info(
+                f"Doing a step from the safe time {safe.history.cycle_time} to {safe.history.cycle_time + step}"
+            )
             if step < timedelta(0):
                 raise ValueError(
                     f"Computed a negative {step=} for a desired {rho=} and an "
@@ -157,7 +161,9 @@ def find_eoc_from_boc(
 ) -> tuple[OperationalState, OperationalState]:
     """Backward-compatible wrapper around EocSearch."""
     return EocSearch(at_eoc=at_eoc, too_risky=too_risky, max_step=max_step)(
-        state, rho=rho, regime=regime,
+        state,
+        rho=rho,
+        regime=regime,
     )
 
 
