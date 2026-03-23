@@ -81,7 +81,6 @@ class EocSearch:
         bo3 = state
         search = _SearchState(state, state, info.drhodt or -100.0, None)
 
-        kwild = regime.get_kwild(search.state)
         while not self.at_eoc(kwild, rho):
             search = self._step(search, kwild=kwild, rho=rho, regime=regime)
             kwild = regime.get_kwild(search.state)
@@ -114,7 +113,7 @@ class EocSearch:
         guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
         logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
         if forward:
-            skip_update = self.too_risky(kwild, rho) or unreliable_drhodt
+            skip_update = unreliable_drhodt or self.too_risky(kwild, rho)
             safe = safe if skip_update else state
             safe_reactivity = safe_reactivity if skip_update else kwild.reactivity
             maxstep = self.max_step(
