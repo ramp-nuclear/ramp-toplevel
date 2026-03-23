@@ -114,8 +114,9 @@ class EocSearch:
         guess = timedelta(seconds=(rho - kwild.reactivity) / drhodt)
         logger.info(f"Stepping from {state.history.cycle_time} with a guess of {guess} reactivity is {kwild.reactivity} ")
         if forward:
-            safe = safe if (self.too_risky(kwild, rho) or unreliable_drhodt) else state
-            safe_reactivity = safe_reactivity if (self.too_risky(kwild, rho) or unreliable_drhodt) else kwild.reactivity
+            skip_update = self.too_risky(kwild, rho) or unreliable_drhodt
+            safe = safe if skip_update else state
+            safe_reactivity = safe_reactivity if skip_update else kwild.reactivity
             maxstep = self.max_step(
                 op_max_timestep=regime.maximal_timestep,
                 kres=kwild,
