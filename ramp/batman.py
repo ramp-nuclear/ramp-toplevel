@@ -1,21 +1,28 @@
 """The Batman object is in charge of the burnup of core states."""
 
 from datetime import timedelta
-from typing import Callable, Optional, Sequence
+from pathlib import PurePath
+from typing import Callable, Iterable, Optional, Sequence
 
 from batman import BurnResult, Configuration
+from batman.graphs import DecayGraph, GraphFilter
+from batman.solver import DistEasyData, InputData, step_desired_k_at_power, timestep_constant_power
+from batman.units import Second
 from corecompute.query import ReactionScore, VolumeQuery
 from corecompute.result import PCM
 from coreoperator.operational_state import OperationalState
+from reactions import Reaction, ReactionRate
 from toolz import groupby
 
-from ramp.backends.burnup import (
-    BurnupModel,
-    ReactionModel,
-    batman_partitions_heuristics,
-    run_burnup,
-    run_burnup_to_k,
-)
+BurnupModel = dict[PurePath, tuple[DecayGraph, Sequence[Reaction]]]
+ReactionModel = dict[PurePath, dict[Reaction, ReactionRate]]
+
+
+def batman_partitions_heuristics(n: int):
+    """A heuristic for the number of partitions in the DistEasyData's dask bag."""
+    return max(n // 100, 1)
+
+NULLFILTER = GraphFilter()
 
 ModelFunc = Callable[[OperationalState], BurnupModel]
 
@@ -51,6 +58,27 @@ class Batman:
         self.burnup_model = burnup_model
         self.partition_func = partition_func
         self.minimal_reactivity_tol = minimal_reactivity_tolerance
+
+    def _prepare(
+        self,
+        state: OperationalState,
+        burnup_model: BurnupModel,
+        rates: ReactionModel,
+    ) -> tuple[float, Iterable[PurePath], DistEasyData]:
+        power = state.power_nuc
+        named_components = dict(state.core.named_components)
+        components = [named_components[name] for name in burnup_model]
+        decay_models = [decay_graph for decay_graph, _ in burnup_model.values()]
+        reaction_models = [
+            [rates[name][reaction] for reaction in reactions] for name, (_, reactions) in burnup_model.items()
+        ]
+        volumes = [c.geometry.volume for c in components]
+        assert all(vol > 0 for vol in volumes)
+        mixtures = [c.mixture for c in components]
+        filters = [NULLFILTER for _ in components]
+        inputdata = InputData(decay_models, reaction_models, filters, mixtures, volumes)
+        data = DistEasyData.from_input(inputdata, partitions=self.partition_func(len(burnup_model)))
+        return power, burnup_model.keys(), data
 
     def decay_model(self, state: OperationalState) -> BurnupModel:
         """Return the BurnupModel of decaying the core at no power.
@@ -91,15 +119,9 @@ class Batman:
         time: timedelta,
     ) -> tuple[OperationalState, BurnResult]:
         model = self.burnup_model(state) if state.power_nuc else self.decay_model(state)
-        return run_burnup(
-            state=state,
-            k0=k0,
-            burnup_model=model,
-            rates=rates,
-            time=time,
-            config=self.config,
-            partition_func=self.partition_func,
-        )
+        power, names, data = self._prepare(state, model, rates)
+        mixtures, info = timestep_constant_power(data, power, time.total_seconds(), config=self.config, k0=k0)
+        return state.burnup(mixtures=dict(zip(names, mixtures)), time=time), info
 
     def burn_pcm(
         self,
@@ -128,18 +150,20 @@ class Batman:
 
         """
         target = k_target(k, drho)
-        return run_burnup_to_k(
-            state,
-            burnup_model=self.burnup_model(state),
-            rates=rates,
+        tol = k_tol(target, max(rho_tol, self.minimal_reactivity_tol))
+        power, names, data = self._prepare(state, self.burnup_model(state), rates)
+        guess_seconds: Optional[Second] = guess and guess.total_seconds()
+        mixtures, info = step_desired_k_at_power(
+            data,
+            p=power,
             k0=k,
             k=target,
-            k_tol=k_tol(target, max(rho_tol, self.minimal_reactivity_tol)),
-            maxt=maximal_timestep,
+            guess=guess_seconds,
+            k_tolerance=tol,
             config=self.config,
-            guess=guess,
-            partition_func=self.partition_func,
+            maxt=maximal_timestep.total_seconds(),
         )
+        return state.burnup(mixtures=dict(zip(names, mixtures)), time=info.time), info
 
 
 def k_tol(k: float, rho_tol: PCM) -> float:

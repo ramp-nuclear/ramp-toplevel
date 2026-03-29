@@ -15,8 +15,7 @@ from dask.delayed import Delayed
 from reactions import Reaction, ReactionRate
 from toolz import compose, curry
 
-from ramp.backends.burnup import ReactionModel
-from ramp.batman import Batman
+from ramp.batman import Batman, ReactionModel
 from ramp.regime.regime import Regime, reaction_rates_calculator
 from ramp.utils.docs import append_doc_of
 
