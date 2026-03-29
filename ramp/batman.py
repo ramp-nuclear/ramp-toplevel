@@ -5,19 +5,22 @@ from pathlib import PurePath
 from typing import Callable, Iterable, Optional, Sequence
 
 from batman import BurnResult, Configuration
-from batman.graphs import GraphFilter
+from batman.graphs import DecayGraph, GraphFilter
 from batman.solver import DistEasyData, InputData, step_desired_k_at_power, timestep_constant_power
 from batman.units import Second
 from corecompute.query import ReactionScore, VolumeQuery
 from corecompute.result import PCM
 from coreoperator.operational_state import OperationalState
+from reactions import Reaction, ReactionRate
 from toolz import groupby
 
-from ramp.backends.burnup import (
-    BurnupModel,
-    ReactionModel,
-    batman_partitions_heuristics,
-)
+BurnupModel = dict[PurePath, tuple[DecayGraph, Sequence[Reaction]]]
+ReactionModel = dict[PurePath, dict[Reaction, ReactionRate]]
+
+
+def batman_partitions_heuristics(n: int):
+    """A heuristic for the number of partitions in the DistEasyData's dask bag."""
+    return max(n // 100, 1)
 
 NULLFILTER = GraphFilter()
 

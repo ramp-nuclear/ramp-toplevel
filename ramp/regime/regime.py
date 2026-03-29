@@ -21,8 +21,7 @@ from dask import compute, delayed
 from more_itertools import difference
 from reactions import Reaction, ReactionRate
 
-from ramp.backends.burnup import ReactionModel
-from ramp.batman import Batman
+from ramp.batman import Batman, ReactionModel
 
 logger = logging.getLogger(__name__)
 
