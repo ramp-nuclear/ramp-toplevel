@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - name: Ruff check
-      uses: astral-sh/ruff-action@v4
+      uses: astral-sh/ruff-action@v4.0.0
 
   build:
     runs-on: ubuntu-latest
