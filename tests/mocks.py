@@ -1,6 +1,8 @@
+import logging
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import timedelta
+from functools import wraps
 from random import Random
 from typing import Iterable, Optional, Sequence
 
@@ -24,15 +26,15 @@ class FakeState:
         self.out_h = 64.0
         self.history = History([OperationalPeriod(StateParams(power=25.0, **aliases), time=timedelta(0))])
         self.params = StateParams(power=25.0)
+        self.tags = set()
 
     @property
     def controls(self) -> Iterable[tuple[float, float]]:
         for alias, height in self.heights.items():
             yield height, self.control_worths[alias]
 
-    @classmethod
-    def new_control_height(cls, state: "FakeState", alias: str, height: float) -> "FakeState":
-        new_state = deepcopy(state)
+    def new_control_height(self, alias: str, height: float) -> "FakeState":
+        new_state = deepcopy(self)
         params = new_state.params.copy(alias=height)
         new_state.history = new_state.history.timestep(params, timedelta(0))
         new_state.params = params
@@ -53,6 +55,29 @@ def _except_v(d: list, v):
     e = d.copy()
     e.remove(v)
     return e
+
+
+def fake_state_factory() -> FakeState:
+    """Create a fake OperationalState"""
+    blades = (f"Blade{i}" for i in range(6))
+    worths = (3000.0, 3000.0, 3000.0, 3000.0, 2000.0, 2000.0)
+    controls = dict(zip(blades, worths))
+    aliases = {f"R_{v}": _except_v(list(controls.keys()), v) for v in controls.keys()}
+    aliases["All"] = list(controls.keys())
+    return FakeState(controls, aliases)
+
+
+def shut_ramp_up(f):
+    @wraps(f)
+    def _wrapper(*args, **kwargs):
+        ramplogger = logging.getLogger("ramp")
+        prevlevel = ramplogger.level
+        ramplogger.level = logging.WARNING
+        res = f(*args, **kwargs)
+        ramplogger.level = prevlevel
+        return res
+
+    return _wrapper
 
 
 class FakeClient:
